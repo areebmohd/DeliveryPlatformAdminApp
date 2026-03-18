@@ -80,8 +80,7 @@ const StoresScreen = ({navigation}: any) => {
     <TouchableOpacity
       style={styles.storeCard}
       onPress={() => {
-        // Optional: navigate to a store detail screen if it exists
-        // navigation.navigate('StoreDetails', { store: item });
+        navigation.navigate('StoreDetails', { store: item });
       }}>
       <View style={styles.bannerContainer}>
         {item.banner_url ? (
@@ -94,16 +93,6 @@ const StoresScreen = ({navigation}: any) => {
       </View>
 
       <View style={styles.infoContainer}>
-        <View style={styles.logoContainer}>
-          {item.logo_url ? (
-            <Image source={{uri: item.logo_url}} style={styles.logoImage} />
-          ) : (
-            <View style={styles.logoPlaceholder}>
-              <Icon name="storefront-outline" size={24} color="#ccc" />
-            </View>
-          )}
-        </View>
-
         <View style={styles.textContainer}>
           <Text style={styles.storeName}>{item.name}</Text>
           {item.address && (
@@ -172,11 +161,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   sectionHeaderText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#8E8E93',
   },
