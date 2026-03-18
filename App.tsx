@@ -13,6 +13,8 @@ import ProductsScreen from './src/screens/ProductsScreen';
 import ProductDetailsScreen from './src/screens/ProductDetailsScreen';
 import PaymentsScreen from './src/screens/PaymentsScreen';
 import StoresScreen from './src/screens/StoresScreen';
+import AccountScreen from './src/screens/AccountScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -46,13 +48,9 @@ function TabNavigator() {
           } else if (route.name === 'Orders') {
             iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'Deliveries') {
-            iconName = focused ? 'car-sport' : 'car-sport-outline';
-          } else if (route.name === 'Products') {
-            iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Payments') {
-            iconName = focused ? 'wallet' : 'wallet-outline';
-          } else if (route.name === 'Stores') {
-            iconName = focused ? 'storefront' : 'storefront-outline';
+            iconName = focused ? 'bicycle' : 'bicycle-outline';
+          } else if (route.name === 'Account') {
+            iconName = focused ? 'person-circle' : 'person-circle-outline';
           }
 
           return <Icon name={iconName} size={size} color={color} />;
@@ -74,19 +72,9 @@ function TabNavigator() {
         options={{ title: 'Deliveries' }} 
       />
       <Tab.Screen 
-        name="Products" 
-        component={ProductsScreen} 
-        options={{ title: 'Products' }} 
-      />
-      <Tab.Screen 
-        name="Stores" 
-        component={StoresScreen} 
-        options={{ title: 'Stores' }} 
-      />
-      <Tab.Screen 
-        name="Payments" 
-        component={PaymentsScreen} 
-        options={{ title: 'Payments' }} 
+        name="Account" 
+        component={AccountScreen} 
+        options={{ title: 'Account' }} 
       />
     </Tab.Navigator>
   );
@@ -109,6 +97,26 @@ function App() {
               headerTitle: 'Product Details',
               headerBackTitle: '' 
             }}
+          />
+          <Stack.Screen 
+            name="Products" 
+            component={ProductsScreen}
+            options={{ headerShown: true, headerTitle: 'Products', headerBackTitle: '' }}
+          />
+          <Stack.Screen 
+            name="Payments" 
+            component={PaymentsScreen}
+            options={{ headerShown: true, headerTitle: 'Payments', headerBackTitle: '' }}
+          />
+          <Stack.Screen 
+            name="Stores" 
+            component={StoresScreen}
+            options={{ headerShown: true, headerTitle: 'Stores', headerBackTitle: '' }}
+          />
+          <Stack.Screen 
+            name="Notifications" 
+            component={NotificationsScreen}
+            options={{ headerShown: true, headerTitle: 'Notifications', headerBackTitle: '' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
