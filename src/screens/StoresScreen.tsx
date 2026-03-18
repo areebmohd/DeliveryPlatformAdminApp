@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import {supabase} from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 interface Store {
@@ -28,28 +28,32 @@ interface StoreSection {
   data: Store[];
 }
 
-const StoresScreen = ({navigation}: any) => {
+const StoresScreen = ({ navigation }: any) => {
   const [storeSections, setStoreSections] = useState<StoreSection[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchStores = async () => {
     try {
       setLoading(true);
-      const {data, error} = await supabase
+      const { data, error } = await supabase
         .from('stores')
         .select('*')
-        .order('created_at', {ascending: false});
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       // Group by created_at date safely
-      const groupedData: {[key: string]: Store[]} = {};
+      const groupedData: { [key: string]: Store[] } = {};
 
       (data as Store[]).forEach(store => {
-        // Handle timezone parsing or use simple substring extraction 
-        // Example "2024-03-31T20:15:00Z" -> "2024-03-31" 
+        // Handle timezone parsing or use simple substring extraction
+        // Example "2024-03-31T20:15:00Z" -> "2024-03-31"
         const dateString = store.created_at
-          ? new Date(store.created_at).toLocaleDateString()
+          ? new Date(store.created_at).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'long', // Use 'long' if you want "March" instead of "Mar"
+            year: 'numeric',
+          })
           : 'Unknown Date';
 
         if (!groupedData[dateString]) {
@@ -76,15 +80,16 @@ const StoresScreen = ({navigation}: any) => {
     fetchStores();
   }, []);
 
-  const renderStoreCard = ({item}: {item: Store}) => (
+  const renderStoreCard = ({ item }: { item: Store }) => (
     <TouchableOpacity
       style={styles.storeCard}
       onPress={() => {
         navigation.navigate('StoreDetails', { store: item });
-      }}>
+      }}
+    >
       <View style={styles.bannerContainer}>
         {item.banner_url ? (
-          <Image source={{uri: item.banner_url}} style={styles.bannerImage} />
+          <Image source={{ uri: item.banner_url }} style={styles.bannerImage} />
         ) : (
           <View style={styles.bannerPlaceholder}>
             <Icon name="image-outline" size={40} color="#ccc" />
@@ -106,8 +111,9 @@ const StoresScreen = ({navigation}: any) => {
           <View
             style={[
               styles.statusBadge,
-              {backgroundColor: item.is_active ? '#34C759' : '#FF3B30'},
-            ]}>
+              { backgroundColor: item.is_active ? '#34C759' : '#FF3B30' },
+            ]}
+          >
             <Text style={styles.statusText}>
               {item.is_active ? 'Active' : 'Inactive'}
             </Text>
@@ -117,7 +123,11 @@ const StoresScreen = ({navigation}: any) => {
     </TouchableOpacity>
   );
 
-  const renderSectionHeader = ({section: {title}}: {section: StoreSection}) => (
+  const renderSectionHeader = ({
+    section: { title },
+  }: {
+    section: StoreSection;
+  }) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeaderText}>{title}</Text>
     </View>
@@ -160,7 +170,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     backgroundColor: '#F2F2F7',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 13,
   },
   sectionHeaderText: {
     fontSize: 15,
@@ -170,13 +180,12 @@ const styles = StyleSheet.create({
   storeCard: {
     backgroundColor: '#fff',
     marginBottom: 12,
-    marginTop: 8,
     marginHorizontal: 16,
     borderRadius: 16,
     overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
