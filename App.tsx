@@ -15,6 +15,7 @@ import PaymentsScreen from './src/screens/PaymentsScreen';
 import StoresScreen from './src/screens/StoresScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import StoreDetailsScreen from './src/screens/StoreDetailsScreen';
 
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -117,6 +118,11 @@ function App() {
             name="Notifications" 
             component={NotificationsScreen}
             options={{ headerShown: true, headerTitle: 'Notifications', headerBackTitle: '' }}
+          />
+          <Stack.Screen 
+            name="StoreDetails" 
+            component={StoreDetailsScreen}
+            options={{ headerShown: false }}
           />
         </Stack.Navigator>
       </NavigationContainer>
