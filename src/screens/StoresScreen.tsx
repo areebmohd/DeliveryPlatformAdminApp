@@ -8,7 +8,9 @@ import {
   Image,
   TouchableOpacity,
   Alert,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../services/supabaseClient';
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -76,9 +78,11 @@ const StoresScreen = ({ navigation }: any) => {
     }
   };
 
-  useEffect(() => {
-    fetchStores();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchStores();
+    }, [])
+  );
 
   const renderStoreCard = ({ item }: { item: Store }) => (
     <TouchableOpacity
@@ -111,11 +115,11 @@ const StoresScreen = ({ navigation }: any) => {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: item.is_active ? '#34C759' : '#FF3B30' },
+              { backgroundColor: item.is_active ? '#34C759' : '#FF9500' },
             ]}
           >
             <Text style={styles.statusText}>
-              {item.is_active ? 'Active' : 'Inactive'}
+              {item.is_active ? 'Active' : 'Pending Verification'}
             </Text>
           </View>
         </View>
@@ -147,6 +151,9 @@ const StoresScreen = ({ navigation }: any) => {
           renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={fetchStores} colors={["#007AFF"]} />
+          }
           ListEmptyComponent={
             <View style={styles.centered}>
               <Icon name="storefront-outline" size={48} color="#ccc" />
