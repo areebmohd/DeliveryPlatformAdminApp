@@ -9,7 +9,8 @@ import {
   Linking,
   Image,
   Platform,
-  TouchableOpacity
+  TouchableOpacity,
+  Alert
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -38,6 +39,8 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'products' | 'info'>('products');
   const insets = useSafeAreaInsets();
+  const [isActivating, setIsActivating] = useState(false);
+  const [currentStore, setCurrentStore] = useState(store);
 
   useEffect(() => {
     fetchProducts();
@@ -58,6 +61,82 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       console.error('Error fetching products:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleActivateStore = async () => {
+    try {
+      setIsActivating(true);
+      
+      // 1. Update database
+      const { error: updateError } = await supabase
+        .from('stores')
+        .update({ 
+          is_active: true, 
+          is_approved: true,
+          verification_images: [] // Clear images after activation as requested
+        })
+        .eq('id', store.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Delete images from storage
+      if (currentStore.verification_images && currentStore.verification_images.length > 0) {
+        for (const url of currentStore.verification_images) {
+          try {
+            const bucket = 'banners'; // as used in mainApp
+            const path = url.split(`${bucket}/`)[1];
+            if (path) {
+              await supabase.storage.from(bucket).remove([path]);
+            }
+          } catch (storageError) {
+            console.error('Error deleting image from storage:', storageError);
+          }
+        }
+      }
+
+        setCurrentStore({ 
+        ...currentStore, 
+        is_active: true, 
+        is_approved: true,
+        verification_images: [] 
+      });
+
+      Alert.alert('Success', 'Store activated successfully! Verification images have been deleted.');
+    } catch (e: any) {
+      console.error('Activation error:', e);
+      Alert.alert('Error', 'Could not activate store. ' + e.message);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const handleDeactivateStore = async () => {
+    try {
+      setIsActivating(true);
+      
+      const { error: updateError } = await supabase
+        .from('stores')
+        .update({ 
+          is_active: false, 
+          is_approved: false 
+        })
+        .eq('id', store.id);
+
+      if (updateError) throw updateError;
+
+      setCurrentStore({ 
+        ...currentStore, 
+        is_active: false, 
+        is_approved: false 
+      });
+
+      Alert.alert('Success', 'Store deactivated successfully!');
+    } catch (e: any) {
+      console.error('Deactivation error:', e);
+      Alert.alert('Error', 'Could not deactivate store. ' + e.message);
+    } finally {
+      setIsActivating(false);
     }
   };
 
@@ -110,7 +189,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       <ScrollView 
         stickyHeaderIndices={[3]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
       >
         {/* Banner */}
         <View style={styles.bannerContainer}>
@@ -126,19 +205,26 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
         {/* Store Branding */}
         <View style={styles.brandingContainer}>
-          <Text style={styles.storeName}>{store.name}</Text>
-          <View style={styles.badgeRow}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{store.category}</Text>
-            </View>
-            {store.sector_area && (
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{store.sector_area}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.storeName}>{currentStore.name}</Text>
+            {!currentStore.is_active && (
+              <View style={styles.inactiveBadge}>
+                <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
               </View>
             )}
-            {store.city && (
+          </View>
+          <View style={styles.badgeRow}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{currentStore.category}</Text>
+            </View>
+            {currentStore.sector_area && (
               <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{store.city}</Text>
+                <Text style={styles.categoryText}>{currentStore.sector_area}</Text>
+              </View>
+            )}
+            {currentStore.city && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{currentStore.city}</Text>
               </View>
             )}
           </View>
@@ -202,10 +288,44 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           ) : (
             <View style={styles.infoSection}>
               <View style={styles.infoCard}>
+                {!currentStore.is_active && (
+                  <>
+                    <View style={styles.verificationSection}>
+                      <Text style={styles.infoLabel}>Verification Information</Text>
+                      
+                      <View style={styles.verificationDetail}>
+                        <Text style={styles.detailLabel}>Owner Name:</Text>
+                        <Text style={styles.detailValue}>{currentStore.owner_name || 'Not provided'}</Text>
+                      </View>
+                      
+                      <View style={styles.verificationDetail}>
+                        <Text style={styles.detailLabel}>Owner Number:</Text>
+                        <TouchableOpacity onPress={() => handleContact('tel', currentStore.owner_number)}>
+                          <Text style={[styles.detailValue, { color: Colors.primary }]}>{currentStore.owner_number || 'Not provided'}</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {currentStore.verification_images && currentStore.verification_images.length > 0 && (
+                        <View style={styles.imagesContainer}>
+                          <Text style={styles.detailLabel}>Store Images:</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageGallery}>
+                            {currentStore.verification_images.map((img: string, idx: number) => (
+                              <TouchableOpacity key={idx} onPress={() => handleContact('browser', img)}>
+                                <Image source={{ uri: img }} style={styles.verificationImage} />
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.infoDivider} />
+                  </>
+                )}
+
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>About the Store</Text>
                   <Text style={styles.infoValue}>
-                    {store.description || 'Quality products from your neighborhood store.'}
+                    {currentStore.description || 'Quality products from your neighborhood store.'}
                   </Text>
                 </View>
 
@@ -318,6 +438,42 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           )}
         </View>
       </ScrollView>
+
+      {currentStore.is_active ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+          <TouchableOpacity 
+            style={[styles.activateButton, { backgroundColor: Colors.error }, isActivating && { opacity: 0.7 }]}
+            onPress={handleDeactivateStore}
+            disabled={isActivating}
+          >
+            {isActivating ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <>
+                <Icon name="close-circle" size={24} color={Colors.white} />
+                <Text style={styles.activateButtonText}>Deactivate Store</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+          <TouchableOpacity 
+            style={[styles.activateButton, isActivating && { opacity: 0.7 }]}
+            onPress={handleActivateStore}
+            disabled={isActivating}
+          >
+            {isActivating ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <>
+                <Icon name="check-decagram" size={24} color={Colors.white} />
+                <Text style={styles.activateButtonText}>Activate Store</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -558,6 +714,87 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textSecondary,
     marginTop: 12,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 7,
+  },
+  inactiveBadge: {
+    backgroundColor: Colors.error + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.error + '30',
+  },
+  inactiveBadgeText: {
+    color: Colors.error,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  verificationSection: {
+    marginBottom: Spacing.xs,
+  },
+  verificationDetail: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    width: 120,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+  imagesContainer: {
+    marginTop: 12,
+  },
+  imageGallery: {
+    marginTop: 10,
+    flexDirection: 'row',
+  },
+  verificationImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    marginRight: 12,
+    backgroundColor: Colors.border,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.white,
+    padding: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  activateButton: {
+    backgroundColor: Colors.success,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: 16,
+    gap: 12,
+  },
+  activateButtonText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '800',
   },
 });
 
