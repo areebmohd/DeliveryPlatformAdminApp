@@ -43,6 +43,30 @@ const AccountScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.adminInfoCard}>
+          <View style={styles.adminHeader}>
+            <View style={styles.adminAvatar}>
+              <Icon name="person-circle-outline" size={60} color="#007AFF" />
+            </View>
+            <View style={styles.adminTextContainer}>
+              <Text style={styles.adminName}>Ashu</Text>
+              <Text style={styles.adminRole}>Administrator</Text>
+            </View>
+          </View>
+          
+          <View style={styles.infoDivider} />
+          
+          <View style={styles.infoRow}>
+            <Icon name="call-outline" size={20} color="#666" />
+            <Text style={styles.infoText}>7534846938</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Icon name="card-outline" size={20} color="#666" />
+            <Text style={styles.infoText}>aashu9105628720-1@okicici</Text>
+          </View>
+        </View>
+
         <View style={styles.menuContainer}>
           {menuItems.map(item => (
             <TouchableOpacity
@@ -89,6 +113,55 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: '#eee',
+    marginTop: 10,
+  },
+  adminInfoCard: {
+    backgroundColor: '#fff',
+    margin: 15,
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  adminHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  adminAvatar: {
+    marginRight: 15,
+  },
+  adminTextContainer: {
+    flex: 1,
+  },
+  adminName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  adminRole: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginBottom: 15,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#555',
+    marginLeft: 12,
   },
   menuItem: {
     flexDirection: 'row',
