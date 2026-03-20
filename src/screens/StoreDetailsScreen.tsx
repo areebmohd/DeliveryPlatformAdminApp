@@ -187,7 +187,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       </View>
 
       <ScrollView 
-        stickyHeaderIndices={[3]}
+        stickyHeaderIndices={[2]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
       >
@@ -434,6 +434,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                   </>
                 )}
               </View>
+              <View style={{ height: 10 }} />
             </View>
           )}
         </View>
