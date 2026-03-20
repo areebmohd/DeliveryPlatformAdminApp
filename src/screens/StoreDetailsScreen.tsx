@@ -43,8 +43,24 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
   const [currentStore, setCurrentStore] = useState(store);
 
   useEffect(() => {
+    fetchStoreDetails();
     fetchProducts();
   }, []);
+
+  const fetchStoreDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stores_with_location')
+        .select('*')
+        .eq('id', store.id)
+        .single();
+
+      if (error) throw error;
+      setCurrentStore(data);
+    } catch (e) {
+      console.error('Error fetching store details:', e);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -288,39 +304,50 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           ) : (
             <View style={styles.infoSection}>
               <View style={styles.infoCard}>
-                {!currentStore.is_active && (
-                  <>
-                    <View style={styles.verificationSection}>
-                      <Text style={styles.infoLabel}>Verification Information</Text>
-                      
-                      <View style={styles.verificationDetail}>
-                        <Text style={styles.detailLabel}>Owner Name:</Text>
-                        <Text style={styles.detailValue}>{currentStore.owner_name || 'Not provided'}</Text>
-                      </View>
-                      
-                      <View style={styles.verificationDetail}>
-                        <Text style={styles.detailLabel}>Owner Number:</Text>
-                        <TouchableOpacity onPress={() => handleContact('tel', currentStore.owner_number)}>
-                          <Text style={[styles.detailValue, { color: Colors.primary }]}>{currentStore.owner_number || 'Not provided'}</Text>
-                        </TouchableOpacity>
-                      </View>
+                <View style={styles.verificationSection}>
+                  <Text style={styles.infoLabel}>Owner Information</Text>
+                  
+                  <View style={styles.verificationDetail}>
+                    <Text style={styles.detailLabel}>Owner Name:</Text>
+                    <Text style={styles.detailValue}>{currentStore.owner_name || 'Not provided'}</Text>
+                  </View>
+                  
+                  <View style={styles.verificationDetail}>
+                    <Text style={styles.detailLabel}>Owner Number:</Text>
+                    <TouchableOpacity onPress={() => handleContact('tel', currentStore.owner_number)}>
+                      <Text style={[styles.detailValue, { color: Colors.primary }]}>{currentStore.owner_number || 'Not provided'}</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                      {currentStore.verification_images && currentStore.verification_images.length > 0 && (
-                        <View style={styles.imagesContainer}>
-                          <Text style={styles.detailLabel}>Store Images:</Text>
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageGallery}>
-                            {currentStore.verification_images.map((img: string, idx: number) => (
-                              <TouchableOpacity key={idx} onPress={() => handleContact('browser', img)}>
-                                <Image source={{ uri: img }} style={styles.verificationImage} />
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      )}
+                  {!currentStore.is_active && currentStore.verification_images && currentStore.verification_images.length > 0 && (
+                    <View style={styles.imagesContainer}>
+                      <Text style={styles.detailLabel}>Store Images:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageGallery}>
+                        {currentStore.verification_images.map((img: string, idx: number) => (
+                          <TouchableOpacity key={idx} onPress={() => handleContact('browser', img)}>
+                            <Image source={{ uri: img }} style={styles.verificationImage} />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
-                    <View style={styles.infoDivider} />
-                  </>
-                )}
+                  )}
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoItem}>
+                  <Text style={styles.infoLabel}>Business Information</Text>
+                  <View style={styles.verificationDetail}>
+                    <Text style={styles.detailLabel}>UPI ID:</Text>
+                    <Text style={styles.detailValue}>{currentStore.upi_id || 'Not provided'}</Text>
+                  </View>
+                  <View style={styles.verificationDetail}>
+                    <Text style={styles.detailLabel}>Email:</Text>
+                    <Text style={styles.detailValue}>{currentStore.email || 'Not provided'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoDivider} />
 
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>About the Store</Text>
@@ -342,31 +369,27 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                 <View style={styles.infoDivider} />
 
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Address</Text>
+                  <Text style={styles.infoLabel}>Live Location</Text>
                   <View style={styles.infoRow}>
-                    <Icon name="map-marker-outline" size={18} color={Colors.error} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.infoValue}>
-                        {store.address_line_1 || store.address}
-                        {store.sector_area ? `\n${store.sector_area}` : ''}
-                        {store.pincode ? ` - ${store.pincode}` : ''}
-                        {store.city ? `\n${store.city}` : ''}
-                        {store.state ? `, ${store.state}` : ''}
-                      </Text>
-                    </View>
+                    <Icon name="crosshairs-gps" size={18} color={Colors.primary} />
+                    <Text style={styles.infoValue}>
+                      {currentStore.location_wkt ? 
+                        currentStore.location_wkt.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ') : 
+                        'Fetching latest coordinates...'}
+                    </Text>
                   </View>
                   
-                  {store.location_wkt && (
+                  {currentStore.location_wkt && (
                     <TouchableOpacity 
                       style={styles.mapLink}
                       onPress={() => {
-                        const match = store.location_wkt.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+                        const match = currentStore.location_wkt.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
                         if (match) {
                           const lng = match[1];
                           const lat = match[2];
                           const url = Platform.select({
-                            ios: `maps:0,0?q=${store.name}@${lat},${lng}`,
-                            android: `geo:0,0?q=${lat},${lng}(${store.name})`
+                            ios: `maps:0,0?q=${currentStore.name}@${lat},${lng}`,
+                            android: `geo:0,0?q=${lat},${lng}(${currentStore.name})`
                           });
                           if (url) Linking.openURL(url);
                         }
@@ -376,6 +399,24 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                       <Text style={styles.mapLinkText}>View on Map</Text>
                     </TouchableOpacity>
                   )}
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoItem}>
+                  <Text style={styles.infoLabel}>Address</Text>
+                  <View style={styles.infoRow}>
+                    <Icon name="map-marker-outline" size={18} color={Colors.error} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.infoValue}>
+                        {(currentStore.address_line_1 || currentStore.address) || 'Not provided'}
+                        {currentStore.sector_area ? `\n${currentStore.sector_area}` : ''}
+                        {currentStore.pincode ? ` - ${currentStore.pincode}` : ''}
+                        {currentStore.city ? `\n${currentStore.city}` : ''}
+                        {currentStore.state ? `, ${currentStore.state}` : ''}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
                 {(store.phone || store.email || store.whatsapp_number) && (
