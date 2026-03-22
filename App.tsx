@@ -81,51 +81,55 @@ function TabNavigator() {
   );
 }
 
+import { AlertProvider } from './src/context/AlertContext';
+
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
-          <Stack.Screen 
-            name="ProductDetails" 
-            component={ProductDetailsScreen}
-            options={{ 
-              headerShown: true, 
-              headerTitle: 'Product Details',
-              headerBackTitle: '' 
-            }}
-          />
-          <Stack.Screen 
-            name="Products" 
-            component={ProductsScreen}
-            options={{ headerShown: true, headerTitle: 'Products', headerBackTitle: '' }}
-          />
-          <Stack.Screen 
-            name="Payments" 
-            component={PaymentsScreen}
-            options={{ headerShown: true, headerTitle: 'Payments', headerBackTitle: '' }}
-          />
-          <Stack.Screen 
-            name="Stores" 
-            component={StoresScreen}
-            options={{ headerShown: true, headerTitle: 'Stores', headerBackTitle: '' }}
-          />
-          <Stack.Screen 
-            name="Notifications" 
-            component={NotificationsScreen}
-            options={{ headerShown: true, headerTitle: 'Notifications', headerBackTitle: '' }}
-          />
-          <Stack.Screen 
-            name="StoreDetails" 
-            component={StoreDetailsScreen}
-            options={{ headerShown: false }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <AlertProvider>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="MainTabs" component={TabNavigator} />
+            <Stack.Screen 
+              name="ProductDetails" 
+              component={ProductDetailsScreen}
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'Product Details',
+                headerBackTitle: '' 
+              }}
+            />
+            <Stack.Screen 
+              name="Products" 
+              component={ProductsScreen}
+              options={{ headerShown: true, headerTitle: 'Products', headerBackTitle: '' }}
+            />
+            <Stack.Screen 
+              name="Payments" 
+              component={PaymentsScreen}
+              options={{ headerShown: true, headerTitle: 'Payments', headerBackTitle: '' }}
+            />
+            <Stack.Screen 
+              name="Stores" 
+              component={StoresScreen}
+              options={{ headerShown: true, headerTitle: 'Stores', headerBackTitle: '' }}
+            />
+            <Stack.Screen 
+              name="Notifications" 
+              component={NotificationsScreen}
+              options={{ headerShown: true, headerTitle: 'Notifications', headerBackTitle: '' }}
+            />
+            <Stack.Screen 
+              name="StoreDetails" 
+              component={StoreDetailsScreen}
+              options={{ headerShown: false }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AlertProvider>
     </SafeAreaProvider>
   );
 }

@@ -16,25 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../services/supabaseClient';
+import { useAlert } from '../context/AlertContext';
+import { Colors, Spacing, borderRadius } from '../theme/colors';
 import { CustomerProductCard } from '../components/CustomerProductCard';
 
-const Colors = {
-  primary: '#007bff',
-  primaryLight: '#e7f1ff',
-  secondary: '#0056b3',
-  background: '#F8F9FA',
-  surface: '#F8F9FA',
-  text: '#1F2937',
-  textSecondary: '#6B7280',
-  error: '#FF3B30',
-  success: '#34C759',
-  border: '#E5E7EB',
-  white: '#FFFFFF',
-  black: '#000000',
-};
-const Spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
 
 const StoreDetailsScreen = ({ route, navigation }: any) => {
+  const { showAlert, showToast } = useAlert();
   const { store } = route.params;
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,10 +130,14 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         approved_details: snapshot
       });
 
-      Alert.alert('Success', 'Store activated successfully! Verification images have been deleted.');
+      showToast('Store activated successfully!', 'success');
     } catch (e: any) {
       console.error('Activation error:', e);
-      Alert.alert('Error', 'Could not activate store. ' + e.message);
+      showAlert({
+        title: 'Error',
+        message: 'Could not activate store. ' + e.message,
+        type: 'error',
+      });
     } finally {
       setIsActivating(false);
     }
@@ -265,10 +257,14 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         approved_details: snapshot 
       });
       setIsVerificationModalVisible(false);
-      Alert.alert('Success', 'Store changes verified successfully!');
+      showToast('Store changes verified successfully!', 'success');
     } catch (e: any) {
       console.error('Verification error:', e);
-      Alert.alert('Error', 'Could not verify changes. ' + e.message);
+      showAlert({
+        title: 'Error',
+        message: 'Could not verify changes. ' + e.message,
+        type: 'error',
+      });
     } finally {
       setIsActivating(false);
     }
@@ -294,10 +290,14 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         is_approved: false 
       });
 
-      Alert.alert('Success', 'Store deactivated successfully!');
+      showToast('Store deactivated successfully!', 'success');
     } catch (e: any) {
       console.error('Deactivation error:', e);
-      Alert.alert('Error', 'Could not deactivate store. ' + e.message);
+      showAlert({
+        title: 'Error',
+        message: 'Could not deactivate store. ' + e.message,
+        type: 'error',
+      });
     } finally {
       setIsActivating(false);
     }

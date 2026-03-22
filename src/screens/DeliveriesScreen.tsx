@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
+import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 interface OrderItem {
@@ -53,6 +54,7 @@ interface OrderSection {
 }
 
 const DeliveriesScreen = () => {
+  const {showAlert} = useAlert();
   const [sections, setSections] = useState<OrderSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,13 +114,13 @@ const DeliveriesScreen = () => {
         .order('created_at', {ascending: false});
 
       if (error) {
-        Alert.alert('Error', error.message);
+        showAlert({title: 'Error', message: error.message, type: 'error'});
       } else {
         const groupedData = groupOrdersByDate(data || []);
         setSections(groupedData);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      showAlert({title: 'Error', message: error.message || 'An unexpected error occurred', type: 'error'});
     } finally {
       setLoading(false);
       setRefreshing(false);

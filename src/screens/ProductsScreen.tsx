@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
+import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {decode} from 'base64-arraybuffer';
@@ -32,6 +33,7 @@ interface Product {
 }
 
 const ProductsScreen = ({navigation}: any) => {
+  const {showAlert, showToast} = useAlert();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'barcode' | 'common' | 'personal'>(
@@ -51,7 +53,7 @@ const ProductsScreen = ({navigation}: any) => {
       if (error) throw error;
       setProducts(data || []);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert({title: 'Error', message: error.message, type: 'error'});
     } finally {
       setLoading(false);
     }
@@ -104,9 +106,9 @@ const ProductsScreen = ({navigation}: any) => {
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? {...p, image_url: publicUrl} : p))
       );
-      Alert.alert('Success', 'Product image updated');
+      showToast('Product image updated', 'success');
     } catch (error: any) {
-      Alert.alert('Upload Error', error.message);
+      showAlert({title: 'Upload Error', message: error.message, type: 'error'});
     } finally {
       setUploading(null);
     }
