@@ -10,7 +10,8 @@ import {
   Image,
   Platform,
   TouchableOpacity,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -41,6 +42,8 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
   const insets = useSafeAreaInsets();
   const [isActivating, setIsActivating] = useState(false);
   const [currentStore, setCurrentStore] = useState(store);
+  const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
+  const [changedFields, setChangedFields] = useState<{ label: string; old: string; new: string }[]>([]);
 
   useEffect(() => {
     fetchStoreDetails();
@@ -85,12 +88,32 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       setIsActivating(true);
       
       // 1. Update database
+      const snapshot = {
+        name: currentStore.name,
+        description: currentStore.description,
+        category: currentStore.category,
+        upi_id: currentStore.upi_id,
+        phone: currentStore.phone,
+        email: currentStore.email,
+        whatsapp_number: currentStore.whatsapp_number,
+        address_line_1: currentStore.address_line_1,
+        pincode: currentStore.pincode,
+        sector_area: currentStore.sector_area,
+        city: currentStore.city,
+        state: currentStore.state,
+        owner_name: currentStore.owner_name,
+        owner_number: currentStore.owner_number,
+        location: currentStore.location_wkt,
+        opening_hours: currentStore.opening_hours,
+      };
+
       const { error: updateError } = await supabase
         .from('stores')
         .update({ 
           is_active: true, 
           is_approved: true,
-          verification_images: [] // Clear images after activation as requested
+          verification_images: [], // Clear images after activation as requested
+          approved_details: snapshot
         })
         .eq('id', store.id);
 
@@ -111,17 +134,115 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         }
       }
 
-        setCurrentStore({ 
+      setCurrentStore({ 
         ...currentStore, 
         is_active: true, 
         is_approved: true,
-        verification_images: [] 
+        verification_images: [],
+        approved_details: snapshot
       });
 
       Alert.alert('Success', 'Store activated successfully! Verification images have been deleted.');
     } catch (e: any) {
       console.error('Activation error:', e);
       Alert.alert('Error', 'Could not activate store. ' + e.message);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const getChangedFields = () => {
+    const fields = [
+      { key: 'name', label: 'Store Name' },
+      { key: 'description', label: 'Description' },
+      { key: 'category', label: 'Category' },
+      { key: 'upi_id', label: 'UPI ID' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'email', label: 'Email' },
+      { key: 'whatsapp_number', label: 'WhatsApp' },
+      { key: 'address_line_1', label: 'Address Line 1' },
+      { key: 'pincode', label: 'Pincode' },
+      { key: 'sector_area', label: 'Sector/Area' },
+      { key: 'city', label: 'City' },
+      { key: 'state', label: 'State' },
+      { key: 'owner_name', label: 'Owner Name' },
+      { key: 'owner_number', label: 'Owner Number' },
+      { key: 'location_wkt', label: 'Location' },
+      { key: 'opening_hours', label: 'Opening Hours' },
+    ];
+
+    const approved = currentStore.approved_details || {};
+    const changes: { label: string; old: string; new: string }[] = [];
+
+    fields.forEach(field => {
+      const oldValue = approved[field.key] || 'Not set';
+      const newValue = currentStore[field.key] || 'Not set';
+
+      if (String(oldValue).trim() !== String(newValue).trim()) {
+        changes.push({
+          label: field.label,
+          old: String(oldValue),
+          new: String(newValue),
+        });
+      }
+    });
+
+    return changes;
+  };
+
+  const handleVerifyChanges = async () => {
+    const changes = getChangedFields();
+    if (changes.length === 0) {
+      // If no data changes detected, still need to clear the flag
+      confirmVerification();
+      return;
+    }
+    setChangedFields(changes);
+    setIsVerificationModalVisible(true);
+  };
+
+  const confirmVerification = async () => {
+    try {
+      setIsActivating(true);
+      const snapshot = {
+        name: currentStore.name,
+        description: currentStore.description,
+        category: currentStore.category,
+        upi_id: currentStore.upi_id,
+        phone: currentStore.phone,
+        email: currentStore.email,
+        whatsapp_number: currentStore.whatsapp_number,
+        address_line_1: currentStore.address_line_1,
+        pincode: currentStore.pincode,
+        sector_area: currentStore.sector_area,
+        city: currentStore.city,
+        state: currentStore.state,
+        owner_name: currentStore.owner_name,
+        owner_number: currentStore.owner_number,
+        location: currentStore.location_wkt,
+        opening_hours: currentStore.opening_hours,
+      };
+
+      const { error } = await supabase
+        .from('stores')
+        .update({ 
+          has_pending_changes: false,
+          approved_details: snapshot
+        })
+        .eq('id', store.id);
+
+      if (error) throw error;
+
+      setCurrentStore({ 
+        ...currentStore, 
+        has_pending_changes: false,
+        approved_details: snapshot 
+      });
+      setIsVerificationModalVisible(false);
+      Alert.alert('Success', 'Store changes verified successfully!');
+    } catch (e: any) {
+      console.error('Verification error:', e);
+      Alert.alert('Error', 'Could not verify changes. ' + e.message);
     } finally {
       setIsActivating(false);
     }
@@ -483,6 +604,16 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
       {currentStore.is_active ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+          {currentStore.has_pending_changes && (
+            <TouchableOpacity 
+              style={[styles.activateButton, { backgroundColor: Colors.success, marginBottom: Spacing.sm }, isActivating && { opacity: 0.7 }]}
+              onPress={handleVerifyChanges}
+              disabled={isActivating}
+            >
+              <Icon name="check-circle" size={24} color={Colors.white} />
+              <Text style={styles.activateButtonText}>Verify Changed Details</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity 
             style={[styles.activateButton, { backgroundColor: Colors.error }, isActivating && { opacity: 0.7 }]}
             onPress={handleDeactivateStore}
@@ -516,6 +647,66 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Verification Changes Modal */}
+      <Modal
+        visible={isVerificationModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsVerificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Icon name="clipboard-check-outline" size={28} color={Colors.primary} />
+              <Text style={styles.modalTitle}>Review Changes</Text>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>
+              The following details have been updated by the owner. Please review before accepting.
+            </Text>
+
+            <ScrollView style={styles.changesList} showsVerticalScrollIndicator={false}>
+              {changedFields.map((field, index) => (
+                <View key={index} style={styles.changeItem}>
+                  <Text style={styles.changeLabel}>{field.label}</Text>
+                  <View style={styles.diffContainer}>
+                    <View style={styles.oldValueContainer}>
+                      <Text style={styles.diffTypeLabel}>Old</Text>
+                      <Text style={styles.oldValueText}>{field.old}</Text>
+                    </View>
+                    <Icon name="arrow-right-thick" size={16} color={Colors.textSecondary} style={{ marginHorizontal: 8 }} />
+                    <View style={styles.newValueContainer}>
+                      <Text style={styles.diffTypeLabel}>New</Text>
+                      <Text style={styles.newValueText}>{field.new}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setIsVerificationModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]} 
+                onPress={confirmVerification}
+                disabled={isActivating}
+              >
+                {isActivating ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Accept Changes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -837,6 +1028,125 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 18,
     fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '80%',
+    padding: 24,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  changesList: {
+    marginBottom: 24,
+  },
+  changeItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  changeLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  diffContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  oldValueContainer: {
+    flex: 1,
+    backgroundColor: '#FFF1F0',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD8D6',
+  },
+  newValueContainer: {
+    flex: 1,
+    backgroundColor: '#F6FFED',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D9F7BE',
+  },
+  diffTypeLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  oldValueText: {
+    fontSize: 13,
+    color: '#CF1322',
+    fontWeight: '600',
+  },
+  newValueText: {
+    fontSize: 13,
+    color: '#389E0D',
+    fontWeight: '600',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  confirmButton: {
+    backgroundColor: Colors.primary,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.white,
   },
 });
 
