@@ -162,7 +162,13 @@ const ProductDetailsScreen = ({route, navigation}: any) => {
             <TouchableOpacity 
               style={styles.viewStoreBtn}
               onPress={() => {
-                // Future: Navigate to Store Details if needed
+                if (product.store_id) {
+                  navigation.navigate('StoreDetails', { store: { id: product.store_id } });
+                } else if (product.stores?.id) {
+                  navigation.navigate('StoreDetails', { store: { id: product.stores.id } });
+                } else {
+                  Alert.alert('Error', 'Store information not found for this product.');
+                }
               }}
             >
               <Text style={styles.viewStoreText}>View Store Profile</Text>

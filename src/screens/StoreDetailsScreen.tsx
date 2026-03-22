@@ -151,6 +151,29 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     }
   };
 
+  const renderFormattedValue = (key: string, value: any) => {
+    if (!value || value === 'Not set' || value === 'Not provided') return 'Not set';
+    
+    if (key === 'opening_hours') {
+      try {
+        const hours = typeof value === 'string' ? JSON.parse(value) : value;
+        if (Array.isArray(hours) && hours.length > 0) {
+          return hours.map((h: any) => `${h.start} - ${h.end}`).join(', ');
+        }
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    if (key === 'location_wkt' || key === 'location') {
+      if (typeof value === 'string') {
+        return value.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ');
+      }
+    }
+    
+    return String(value);
+  };
+
   const getChangedFields = () => {
     const fields = [
       { key: 'name', label: 'Store Name' },
@@ -175,14 +198,17 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     const changes: { label: string; old: string; new: string }[] = [];
 
     fields.forEach(field => {
-      const oldValue = approved[field.key] || 'Not set';
-      const newValue = currentStore[field.key] || 'Not set';
+      const oldValueRaw = approved[field.key] || 'Not set';
+      const newValueRaw = currentStore[field.key] || 'Not set';
+      
+      const oldValue = renderFormattedValue(field.key, oldValueRaw);
+      const newValue = renderFormattedValue(field.key, newValueRaw);
 
-      if (String(oldValue).trim() !== String(newValue).trim()) {
+      if (oldValue !== newValue) {
         changes.push({
           label: field.label,
-          old: String(oldValue),
-          new: String(newValue),
+          old: oldValue,
+          new: newValue,
         });
       }
     });
@@ -483,7 +509,11 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                   <Text style={styles.infoLabel}>Operating Hours</Text>
                   <View style={styles.infoRow}>
                     <Icon name="clock-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.infoValue}>{store.opening_hours || 'Contact store for timings'}</Text>
+                    <Text style={styles.infoValue}>
+                      {renderFormattedValue('opening_hours', currentStore.opening_hours) !== 'Not set' ? 
+                        renderFormattedValue('opening_hours', currentStore.opening_hours) : 
+                        'Contact store for timings'}
+                    </Text>
                   </View>
                 </View>
 
