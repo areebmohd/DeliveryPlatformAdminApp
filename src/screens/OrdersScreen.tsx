@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
+import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 interface OrderItem {
@@ -39,6 +40,7 @@ interface OrderSection {
 }
 
 const OrdersScreen = () => {
+  const {showAlert, showToast} = useAlert();
   const [sections, setSections] = useState<OrderSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +89,7 @@ const OrdersScreen = () => {
 
       if (error) {
         console.error('Supabase error fetching orders:', error);
-        Alert.alert('Error', error.message);
+        showAlert({title: 'Error', message: error.message, type: 'error'});
       } else {
         console.log('Fetched orders count:', data?.length || 0);
         const groupedData = groupOrdersByDate(data || []);
@@ -95,7 +97,7 @@ const OrdersScreen = () => {
       }
     } catch (error: any) {
       console.error('Unexpected error in fetchOrders:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      showAlert({title: 'Error', message: error.message || 'An unexpected error occurred', type: 'error'});
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,32 +151,32 @@ const OrdersScreen = () => {
   };
 
   const handleVerifyPayment = async (orderId: string, orderNumber: string) => {
-    Alert.alert(
-      'Confirm Payment',
-      `Are you sure you have received the payment for order #${orderNumber}?`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Yes, Received',
-          onPress: async () => {
-            try {
-              const {error} = await supabase
-                .from('orders')
-                .update({payment_status: 'verified'})
-                .eq('id', orderId);
+    showAlert({
+      title: 'Confirm Payment',
+      message: `Are you sure you have received the payment for order #${orderNumber}?`,
+      type: 'warning',
+      showCancel: true,
+      primaryAction: {
+        text: 'Yes, Received',
+        onPress: async () => {
+          try {
+            const {error} = await supabase
+              .from('orders')
+              .update({payment_status: 'verified'})
+              .eq('id', orderId);
 
-              if (error) {
-                Alert.alert('Error', error.message);
-              } else {
-                fetchOrders(); // Refresh the list
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to update payment status');
+            if (error) {
+              showAlert({title: 'Error', message: error.message, type: 'error'});
+            } else {
+              showToast('Payment verified', 'success');
+              fetchOrders(); // Refresh the list
             }
-          },
+          } catch (error: any) {
+            showAlert({title: 'Error', message: error.message || 'Failed to update payment status', type: 'error'});
+          }
         },
-      ],
-    );
+      },
+    });
   };
 
   const renderOrderItem = ({item}: {item: Order}) => (

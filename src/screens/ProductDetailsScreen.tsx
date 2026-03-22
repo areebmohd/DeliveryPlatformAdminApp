@@ -13,12 +13,14 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {supabase} from '../services/supabaseClient';
+import {useAlert} from '../context/AlertContext';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {decode} from 'base64-arraybuffer';
 
 const {width} = Dimensions.get('window');
 
 const ProductDetailsScreen = ({route, navigation}: any) => {
+  const {showAlert, showToast} = useAlert();
   const {product: initialProduct} = route.params;
   const insets = useSafeAreaInsets();
   const [product, setProduct] = useState(initialProduct);
@@ -67,9 +69,9 @@ const ProductDetailsScreen = ({route, navigation}: any) => {
       const updatedProduct = {...product, image_url: publicUrl};
       setProduct(updatedProduct);
       
-      Alert.alert('Success', 'Product image updated');
+      showToast('Product image updated', 'success');
     } catch (error: any) {
-      Alert.alert('Upload Error', error.message);
+      showAlert({title: 'Upload Error', message: error.message, type: 'error'});
     } finally {
       setUploading(false);
     }
@@ -167,7 +169,7 @@ const ProductDetailsScreen = ({route, navigation}: any) => {
                 } else if (product.stores?.id) {
                   navigation.navigate('StoreDetails', { store: { id: product.stores.id } });
                 } else {
-                  Alert.alert('Error', 'Store information not found for this product.');
+                  showAlert({title: 'Error', message: 'Store information not found for this product.', type: 'error'});
                 }
               }}
             >

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../services/supabaseClient';
+import { useAlert } from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 interface Store {
@@ -31,6 +32,7 @@ interface StoreSection {
 }
 
 const StoresScreen = ({ navigation }: any) => {
+  const { showAlert } = useAlert();
   const [storeSections, setStoreSections] = useState<StoreSection[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,7 +74,11 @@ const StoresScreen = ({ navigation }: any) => {
 
       setStoreSections(sections);
     } catch (error: any) {
-      Alert.alert('Error checking stores', error.message);
+      showAlert({
+        title: 'Error checking stores',
+        message: error.message,
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }

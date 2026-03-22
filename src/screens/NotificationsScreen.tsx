@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { supabase } from '../services/supabaseClient';
+import { useAlert } from '../context/AlertContext';
 
 const TARGET_GROUPS = [
   { id: 'customer', label: 'Customer', icon: 'person-outline' },
@@ -21,6 +22,7 @@ const TARGET_GROUPS = [
 ];
 
 const NotificationsScreen = () => {
+  const { showAlert, showToast } = useAlert();
   const [selectedGroup, setSelectedGroup] = useState('customer');
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,7 @@ const NotificationsScreen = () => {
 
   const handleSendBroadcast = async () => {
     if (!title.trim() || !description.trim()) {
-      Alert.alert('Error', 'Please fill in both title and description');
+      showAlert({title: 'Error', message: 'Please fill in both title and description', type: 'error'});
       return;
     }
 
@@ -65,9 +67,9 @@ const NotificationsScreen = () => {
     ]);
 
     if (error) {
-      Alert.alert('Error', 'Failed to send notification: ' + error.message);
+      showAlert({title: 'Error', message: 'Failed to send notification: ' + error.message, type: 'error'});
     } else {
-      Alert.alert('Success', 'Broadcast sent successfully to ' + selectedGroup + 's!');
+      showToast('Broadcast sent successfully!', 'success');
       setTitle('');
       setDescription('');
       setModalVisible(false);
