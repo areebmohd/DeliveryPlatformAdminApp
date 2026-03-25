@@ -16,6 +16,8 @@ import StoresScreen from './src/screens/StoresScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import StoreDetailsScreen from './src/screens/StoreDetailsScreen';
+import ImagesScreen from './src/screens/ImagesScreen';
+
 
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -127,7 +129,13 @@ function App() {
               component={StoreDetailsScreen}
               options={{ headerShown: false }}
             />
+            <Stack.Screen 
+              name="Images" 
+              component={ImagesScreen}
+              options={{ headerShown: true, headerTitle: 'Manage Images', headerBackTitle: '' }}
+            />
           </Stack.Navigator>
+
         </NavigationContainer>
       </AlertProvider>
     </SafeAreaProvider>

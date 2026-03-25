@@ -84,7 +84,7 @@ const OrdersScreen = () => {
       console.log('Fetching orders...');
       const {data, error} = await supabase
         .from('orders')
-        .select('*, stores(name), order_items(*)')
+        .select('*, stores(name), order_items(*, products(stores(name)))')
         .order('created_at', {ascending: false});
 
       if (error) {
@@ -204,7 +204,12 @@ const OrdersScreen = () => {
 
       <View style={styles.storeContainer}>
         <Icon name="storefront-outline" size={16} color="#666" />
-        <Text style={styles.storeName}>{item.stores?.name || 'Unknown Store'}</Text>
+        <Text style={styles.storeName}>
+          {(() => {
+            const storeNames = [...new Set(item.order_items?.map((oi: any) => oi.products?.stores?.name || item.stores?.name).filter(Boolean))];
+            return storeNames.join(', ') || 'Unknown Store';
+          })()}
+        </Text>
       </View>
 
       <View style={styles.itemsList}>

@@ -33,6 +33,12 @@ const AccountScreen = () => {
       screen: 'Stores',
     },
     {
+      id: 'images',
+      title: 'Images',
+      icon: 'images-outline',
+      screen: 'Images',
+    },
+    {
       id: 'notifications',
       title: 'Notifications',
       icon: 'notifications-outline',
