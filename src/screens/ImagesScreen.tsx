@@ -21,7 +21,7 @@ const {width} = Dimensions.get('window');
 
 const PRODUCT_CATEGORIES = [
   'Clothing & Accessories',
-  'Electronics',
+  'Electronics & Appliances',
   'Food & Beverages',
   'Health & Beauty',
   'Home & Garden',
