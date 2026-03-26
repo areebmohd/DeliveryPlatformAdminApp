@@ -114,44 +114,56 @@ const ProductDetailsScreen = ({route, navigation}: any) => {
 
         {/* Content Section */}
         <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.titleContainer}>
+          <View style={styles.headerInfo}>
+            <View style={styles.nameRow}>
               <Text style={styles.name}>{product.name}</Text>
-              <Text style={styles.category}>{product.category || 'Uncategorized'}</Text>
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{product.category || 'Uncategorized'}</Text>
+              </View>
             </View>
-            <Text style={styles.price}>₹{product.price}</Text>
+            <View style={styles.priceWeightRow}>
+              <Text style={styles.price}>₹{product.price}</Text>
+              {product.weight_kg !== null && (
+                <Text style={styles.weight}> • {product.weight_kg} kg</Text>
+              )}
+              <View style={[styles.typeBadge, { 
+                backgroundColor: product.product_type === 'barcode' ? '#E5F1FF' : 
+                                product.product_type === 'common' ? '#FFF4E5' : '#F2F2F7' 
+              }]}>
+                <Text style={[styles.typeText, { 
+                  color: product.product_type === 'barcode' ? '#007AFF' : 
+                          product.product_type === 'common' ? '#FF9500' : '#666' 
+                }]}>{product.product_type}</Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Admin Info Tags */}
-          <View style={styles.tagContainer}>
-            <View style={[styles.tag, {backgroundColor: '#E5F1FF'}]}>
-              <Icon name="pricetag-outline" size={14} color="#007AFF" />
-              <Text style={[styles.tagText, {color: '#007AFF'}]}>
-                {product.product_type.toUpperCase()}
-              </Text>
-            </View>
-            {product.weight_kg !== null && (
-              <View style={[styles.tag, {backgroundColor: '#FFF4E5'}]}>
-                <Icon name="scale-outline" size={14} color="#FF9500" />
-                <Text style={[styles.tagText, {color: '#FF9500'}]}>{product.weight_kg} kg</Text>
-              </View>
-            )}
-            {product.barcode && (
-              <View style={[styles.tag, {backgroundColor: '#F2F2F7'}]}>
-                <Icon name="barcode-outline" size={14} color="#666" />
-                <Text style={[styles.tagText, {color: '#666'}]}>{product.barcode}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Description */}
+          {/* Description / Specifications */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>
-              {product.description || 'No description provided for this product.'}
-            </Text>
+            {(() => {
+              try {
+                if (!product.description) return <Text style={styles.description}>No description available.</Text>;
+                const parsed = JSON.parse(product.description);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  return (
+                    <View style={styles.specList}>
+                      {parsed.map((item: any, idx: number) => (
+                        <View key={idx} style={styles.specItem}>
+                          <Text style={styles.specLabel}>{item.title || 'Info'}</Text>
+                          <Text style={styles.specValue}>{item.text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                }
+                return <Text style={styles.description}>{product.description}</Text>;
+              } catch (e) {
+                return <Text style={styles.description}>{product.description}</Text>;
+              }
+            })()}
           </View>
 
           {/* Store Info */}
@@ -178,26 +190,6 @@ const ProductDetailsScreen = ({route, navigation}: any) => {
             </TouchableOpacity>
           </View>
 
-          {/* Product IDs (Admin Only) */}
-          <View style={styles.adminSection}>
-            <Text style={styles.adminTitle}>Internal Metadata</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Product ID:</Text>
-              <Text style={styles.metaValue}>{product.id}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Last Updated:</Text>
-              <Text style={styles.metaValue}>
-                {new Date(product.updated_at || Date.now()).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
-            </View>
-          </View>
         </View>
       </ScrollView>
     </View>
@@ -259,54 +251,62 @@ const styles = StyleSheet.create({
     marginTop: -30,
     backgroundColor: '#fff',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+  headerInfo: {
+    marginBottom: 8,
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: 12,
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
   },
   name: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1C1C1E',
-    marginBottom: 4,
   },
-  category: {
-    fontSize: 16,
+  categoryBadge: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  priceWeightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  price: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#007AFF',
+  },
+  weight: {
+    fontSize: 18,
     color: '#8E8E93',
     fontWeight: '500',
   },
-  price: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#007AFF',
+  typeBadge: {
+    marginLeft: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  typeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   divider: {
     height: 1,
     backgroundColor: '#F2F2F7',
     marginVertical: 20,
-  },
-  tagContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 24,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   section: {
     marginBottom: 24,
@@ -321,6 +321,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#3A3A3C',
     lineHeight: 22,
+  },
+  specList: {
+    marginTop: 8,
+  },
+  specItem: {
+    marginBottom: 16,
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  specLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  specValue: {
+    fontSize: 15,
+    color: '#1C1C1E',
+    lineHeight: 20,
+    fontWeight: '600',
   },
   storeCard: {
     backgroundColor: '#F8F8F8',
@@ -361,35 +386,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
-  },
-  adminSection: {
-    backgroundColor: '#1C1C1E',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 40,
-  },
-  adminTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  metaLabel: {
-    fontSize: 13,
-    color: '#8E8E93',
-  },
-  metaValue: {
-    fontSize: 13,
-    color: '#D1D1D6',
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-    marginLeft: 20,
   },
 });
 

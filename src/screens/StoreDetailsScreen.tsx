@@ -60,7 +60,8 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         .from('products')
         .select('*')
         .eq('store_id', store.id)
-        .eq('in_stock', true);
+        .eq('in_stock', true)
+        .eq('is_deleted', false);
 
       if (error) throw error;
       setProducts(data || []);

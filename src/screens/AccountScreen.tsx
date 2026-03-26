@@ -44,6 +44,12 @@ const AccountScreen = () => {
       icon: 'notifications-outline',
       screen: 'Notifications',
     },
+    {
+      id: 'riders',
+      title: 'Riders',
+      icon: 'bicycle-outline',
+      screen: 'Riders',
+    },
   ];
 
   return (

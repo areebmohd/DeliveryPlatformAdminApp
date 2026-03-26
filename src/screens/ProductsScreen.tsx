@@ -48,6 +48,7 @@ const ProductsScreen = ({navigation}: any) => {
         .from('products')
         .select('*, stores(name)')
         .eq('product_type', activeTab)
+        .eq('is_deleted', false)
         .order('created_at', {ascending: false});
 
       if (error) throw error;
