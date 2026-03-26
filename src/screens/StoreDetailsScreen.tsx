@@ -86,7 +86,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         whatsapp_number: currentStore.whatsapp_number,
         address_line_1: currentStore.address_line_1,
         pincode: currentStore.pincode,
-        sector_area: currentStore.sector_area,
         city: currentStore.city,
         state: currentStore.state,
         owner_name: currentStore.owner_name,
@@ -177,7 +176,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       { key: 'whatsapp_number', label: 'WhatsApp' },
       { key: 'address_line_1', label: 'Address Line 1' },
       { key: 'pincode', label: 'Pincode' },
-      { key: 'sector_area', label: 'Sector/Area' },
       { key: 'city', label: 'City' },
       { key: 'state', label: 'State' },
       { key: 'owner_name', label: 'Owner Name' },
@@ -232,7 +230,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         whatsapp_number: currentStore.whatsapp_number,
         address_line_1: currentStore.address_line_1,
         pincode: currentStore.pincode,
-        sector_area: currentStore.sector_area,
         city: currentStore.city,
         state: currentStore.state,
         owner_name: currentStore.owner_name,
@@ -369,22 +366,24 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         {/* Store Branding */}
         <View style={styles.brandingContainer}>
           <View style={styles.nameRow}>
-            <Text style={styles.storeName}>{currentStore.name}</Text>
-            {!currentStore.is_active && (
-              <View style={styles.inactiveBadge}>
-                <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
-              </View>
-            )}
+            <Text style={styles.storeName} numberOfLines={1}>{currentStore.name}</Text>
+            <View style={styles.badgeContainer}>
+              {!currentStore.is_active && (
+                <View style={styles.inactiveBadge}>
+                  <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
+                </View>
+              )}
+              {currentStore.has_pending_changes && (
+                <View style={[styles.inactiveBadge, { backgroundColor: Colors.warning + '15', borderColor: Colors.warning + '30', marginLeft: 8 }]}>
+                  <Text style={[styles.inactiveBadgeText, { color: Colors.warning }]}>UNVERIFIED</Text>
+                </View>
+              )}
+            </View>
           </View>
           <View style={styles.badgeRow}>
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{currentStore.category}</Text>
             </View>
-            {currentStore.sector_area && (
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{currentStore.sector_area}</Text>
-              </View>
-            )}
             {currentStore.city && (
               <View style={styles.categoryBadge}>
                 <Text style={styles.categoryText}>{currentStore.city}</Text>
@@ -561,7 +560,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.infoValue}>
                         {(currentStore.address_line_1 || currentStore.address) || 'Not provided'}
-                        {currentStore.sector_area ? `\n${currentStore.sector_area}` : ''}
                         {currentStore.pincode ? ` - ${currentStore.pincode}` : ''}
                         {currentStore.city ? `\n${currentStore.city}` : ''}
                         {currentStore.state ? `, ${currentStore.state}` : ''}
@@ -788,12 +786,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  storeName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 7,
-  },
   categoryBadge: {
     backgroundColor: Colors.primaryLight,
     paddingHorizontal: 12,
@@ -983,6 +975,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 7,
+    gap: 12,
+  },
+  storeName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.text,
+    flex: 1,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   inactiveBadge: {
     backgroundColor: Colors.error + '15',

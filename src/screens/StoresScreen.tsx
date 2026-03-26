@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../services/supabaseClient';
 import { useAlert } from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { Colors, Spacing, borderRadius } from '../theme/colors';
 
 interface Store {
   id: string;
@@ -23,6 +24,7 @@ interface Store {
   logo_url: string | null;
   is_active: boolean;
   is_approved: boolean;
+  has_pending_changes: boolean;
   created_at: string;
 }
 
@@ -34,7 +36,39 @@ interface StoreSection {
 const StoresScreen = ({ navigation }: any) => {
   const { showAlert } = useAlert();
   const [storeSections, setStoreSections] = useState<StoreSection[]>([]);
+  const [allStores, setAllStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unactive' | 'unverified'>('all');
+
+  const processStores = (stores: Store[], filter: string) => {
+    const filtered = stores.filter(store => {
+      if (filter === 'unactive') return !store.is_active;
+      if (filter === 'unverified') return store.has_pending_changes;
+      return true;
+    });
+
+    const groupedData: { [key: string]: Store[] } = {};
+
+    filtered.forEach(store => {
+      const dateString = store.created_at
+        ? new Date(store.created_at).toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+        : 'Unknown Date';
+
+      if (!groupedData[dateString]) {
+        groupedData[dateString] = [];
+      }
+      groupedData[dateString].push(store);
+    });
+
+    return Object.keys(groupedData).map(date => ({
+      title: date,
+      data: groupedData[date],
+    }));
+  };
 
   const fetchStores = async () => {
     try {
@@ -46,32 +80,8 @@ const StoresScreen = ({ navigation }: any) => {
 
       if (error) throw error;
 
-      // Group by created_at date safely
-      const groupedData: { [key: string]: Store[] } = {};
-
-      (data as Store[]).forEach(store => {
-        // Handle timezone parsing or use simple substring extraction
-        // Example "2024-03-31T20:15:00Z" -> "2024-03-31"
-        const dateString = store.created_at
-          ? new Date(store.created_at).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'long', // Use 'long' if you want "March" instead of "Mar"
-            year: 'numeric',
-          })
-          : 'Unknown Date';
-
-        if (!groupedData[dateString]) {
-          groupedData[dateString] = [];
-        }
-        groupedData[dateString].push(store);
-      });
-
-      // Convert grouped object to array of sections
-      const sections: StoreSection[] = Object.keys(groupedData).map(date => ({
-        title: date,
-        data: groupedData[date],
-      }));
-
+      setAllStores(data as Store[]);
+      const sections = processStores(data as Store[], activeFilter);
       setStoreSections(sections);
     } catch (error: any) {
       showAlert({
@@ -89,6 +99,11 @@ const StoresScreen = ({ navigation }: any) => {
       fetchStores();
     }, [])
   );
+
+  useEffect(() => {
+    const sections = processStores(allStores, activeFilter);
+    setStoreSections(sections);
+  }, [activeFilter, allStores]);
 
   const renderStoreCard = ({ item }: { item: Store }) => (
     <TouchableOpacity
@@ -118,6 +133,11 @@ const StoresScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.statusContainer}>
+          {item.has_pending_changes && (
+            <View style={[styles.statusBadge, { backgroundColor: '#FF3B30', marginBottom: 4 }]}>
+              <Text style={styles.statusText}>Unverified Changes</Text>
+            </View>
+          )}
           <View
             style={[
               styles.statusBadge,
@@ -125,7 +145,7 @@ const StoresScreen = ({ navigation }: any) => {
             ]}
           >
             <Text style={styles.statusText}>
-              {item.is_active ? 'Active' : 'Pending Verification'}
+              {item.is_active ? 'Active' : 'Unactive'}
             </Text>
           </View>
         </View>
@@ -145,7 +165,27 @@ const StoresScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {loading ? (
+      <View style={styles.tabBar}>
+        {(['all', 'unactive', 'unverified'] as const).map((filter) => (
+          <TouchableOpacity
+            key={filter}
+            style={[
+              styles.tab,
+              activeFilter === filter && styles.activeTab
+            ]}
+            onPress={() => setActiveFilter(filter)}
+          >
+            <Text style={[
+              styles.tabTextHeader,
+              activeFilter === filter && styles.activeTabTextHeader
+            ]}>
+              {filter.charAt(0).toUpperCase() + filter.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading && allStores.length === 0 ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
@@ -175,13 +215,13 @@ const StoresScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: Colors.background,
   },
   listContent: {
     paddingBottom: 32,
   },
   sectionHeader: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: Colors.background,
     paddingHorizontal: 16,
     paddingVertical: 13,
   },
@@ -284,6 +324,38 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#8E8E93',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  tab: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 25,
+    marginRight: 10,
+    backgroundColor: Colors.border,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  activeTab: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+    elevation: 4,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  tabTextHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  activeTabTextHeader: {
+    color: Colors.white,
   },
 });
 
