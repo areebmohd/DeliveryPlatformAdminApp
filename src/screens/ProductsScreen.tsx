@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
+import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {decode} from 'base64-arraybuffer';
@@ -39,17 +40,32 @@ const ProductsScreen = ({navigation}: any) => {
   const [activeTab, setActiveTab] = useState<'barcode' | 'common' | 'personal'>(
     'barcode'
   );
+  const [barcodeFilter, setBarcodeFilter] = useState<'all' | 'uncomplete' | 'needs_changes'>('all');
+  const [commonFilter, setCommonFilter] = useState<'all' | 'no_image'>('all');
   const [uploading, setUploading] = useState<string | null>(null);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const {data, error} = await supabase
+      let query = supabase
         .from('products')
         .select('*, stores(name)')
         .eq('product_type', activeTab)
-        .eq('is_deleted', false)
-        .order('created_at', {ascending: false});
+        .eq('is_deleted', false);
+
+      if (activeTab === 'barcode') {
+        if (barcodeFilter === 'uncomplete') {
+          query = query.eq('is_info_complete', false);
+        } else if (barcodeFilter === 'needs_changes') {
+          query = query.eq('needs_changes', true);
+        }
+      } else if (activeTab === 'common') {
+        if (commonFilter === 'no_image') {
+          query = query.or('image_url.is.null,image_url.eq.""');
+        }
+      }
+
+      const {data, error} = await query.order('created_at', {ascending: false});
 
       if (error) throw error;
       setProducts(data || []);
@@ -60,9 +76,11 @@ const ProductsScreen = ({navigation}: any) => {
     }
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, [activeTab]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts();
+    }, [activeTab, barcodeFilter, commonFilter])
+  );
 
   const handlePickImage = async (productId: string) => {
     const result = await launchImageLibrary({
@@ -194,6 +212,47 @@ const ProductsScreen = ({navigation}: any) => {
         ))}
       </View>
 
+      {/* Barcode Sub-Tabs */}
+      {activeTab === 'barcode' && (
+        <View style={styles.subTabBar}>
+          {(['all', 'uncomplete', 'needs_changes'] as const).map((filter) => (
+            <TouchableOpacity
+              key={filter}
+              style={[styles.subTab, barcodeFilter === filter && styles.activeSubTab]}
+              onPress={() => setBarcodeFilter(filter)}>
+              <Text
+                style={[
+                  styles.subTabText,
+                  barcodeFilter === filter && styles.activeSubTabText,
+                ]}>
+                {filter === 'uncomplete' ? 'Uncomplete Info' : 
+                 filter === 'needs_changes' ? 'Need Changes' : 'All'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Common Sub-Tabs */}
+      {activeTab === 'common' && (
+        <View style={styles.subTabBar}>
+          {(['all', 'no_image'] as const).map((filter) => (
+            <TouchableOpacity
+              key={filter}
+              style={[styles.subTab, commonFilter === filter && styles.activeSubTab]}
+              onPress={() => setCommonFilter(filter)}>
+              <Text
+                style={[
+                  styles.subTabText,
+                  commonFilter === filter && styles.activeSubTabText,
+                ]}>
+                {filter === 'no_image' ? 'Require Image' : 'All'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#007AFF" />
@@ -252,6 +311,32 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#fff',
+  },
+  subTabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  subTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  activeSubTab: {
+    backgroundColor: '#FFE5E5',
+    borderColor: '#FF3B30',
+  },
+  subTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  activeSubTabText: {
+    color: '#FF3B30',
   },
   listContent: {
     padding: 12,
