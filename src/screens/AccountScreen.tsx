@@ -21,34 +21,22 @@ const AccountScreen = () => {
       screen: 'Payments',
     },
     {
-      id: 'products',
-      title: 'Products',
-      icon: 'cube-outline',
-      screen: 'Products',
-    },
-    {
       id: 'stores',
       title: 'Stores',
       icon: 'storefront-outline',
       screen: 'Stores',
     },
     {
-      id: 'images',
-      title: 'Images',
-      icon: 'images-outline',
-      screen: 'Images',
+      id: 'riders',
+      title: 'Riders',
+      icon: 'bicycle-outline',
+      screen: 'Riders',
     },
     {
       id: 'notifications',
       title: 'Notifications',
       icon: 'notifications-outline',
       screen: 'Notifications',
-    },
-    {
-      id: 'riders',
-      title: 'Riders',
-      icon: 'bicycle-outline',
-      screen: 'Riders',
     },
   ];
 

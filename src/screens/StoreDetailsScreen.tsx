@@ -18,15 +18,12 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../services/supabaseClient';
 import { useAlert } from '../context/AlertContext';
 import { Colors, Spacing, borderRadius } from '../theme/colors';
-import { CustomerProductCard } from '../components/CustomerProductCard';
 
 
 const StoreDetailsScreen = ({ route, navigation }: any) => {
   const { showAlert, showToast } = useAlert();
   const { store } = route.params;
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'products' | 'info'>('products');
+  const [loading, setLoading] = useState(false);
   const insets = useSafeAreaInsets();
   const [isActivating, setIsActivating] = useState(false);
   const [currentStore, setCurrentStore] = useState(store);
@@ -35,7 +32,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
   useEffect(() => {
     fetchStoreDetails();
-    fetchProducts();
   }, []);
 
   const fetchStoreDetails = async () => {
@@ -53,24 +49,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('store_id', store.id)
-        .eq('in_stock', true)
-        .eq('is_deleted', false);
 
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (e) {
-      console.error('Error fetching products:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleActivateStore = async () => {
     try {
@@ -348,7 +327,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       </View>
 
       <ScrollView 
-        stickyHeaderIndices={[2]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
       >
@@ -393,241 +371,185 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabWrapper}>
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'products' && styles.activeTab]}
-              onPress={() => setActiveTab('products')}
-            >
-              <Icon
-                name="package-variant-closed"
-                size={20}
-                color={activeTab === 'products' ? Colors.white : Colors.primary}
-              />
-              <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
-                Products
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'info' && styles.activeTab]}
-              onPress={() => setActiveTab('info')}
-            >
-              <Icon
-                name={activeTab === 'info' ? 'information' : 'information-outline'}
-                size={20}
-                color={activeTab === 'info' ? Colors.white : Colors.primary}
-              />
-              <Text style={[styles.tabText, activeTab === 'info' && styles.activeTabText]}>
-                Store Info
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         <View style={styles.tabContent}>
-          {activeTab === 'products' ? (
-            <View style={styles.productsSection}>
-              {loading ? (
-                <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
-              ) : products.length > 0 ? (
-              <View style={styles.productsGrid}>
-                {products.map((product) => (
-                  <CustomerProductCard
-                    key={product.id}
-                    product={product}
-                    onPress={() => navigation.navigate('ProductDetails', { product })}
-                    width="48.5%"
-                  />
-                ))}
+          <View style={styles.infoSection}>
+            <View style={styles.infoCard}>
+              <View style={styles.verificationSection}>
+                <Text style={styles.infoLabel}>Owner Information</Text>
+                
+                <View style={styles.verificationDetail}>
+                  <Text style={styles.detailLabel}>Owner Name:</Text>
+                  <Text style={styles.detailValue}>{currentStore.owner_name || 'Not provided'}</Text>
+                </View>
+                
+                <View style={styles.verificationDetail}>
+                  <Text style={styles.detailLabel}>Owner Number:</Text>
+                  <TouchableOpacity onPress={() => handleContact('tel', currentStore.owner_number)}>
+                    <Text style={[styles.detailValue, { color: Colors.primary }]}>{currentStore.owner_number || 'Not provided'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!currentStore.is_active && currentStore.verification_images && currentStore.verification_images.length > 0 && (
+                  <View style={styles.imagesContainer}>
+                    <Text style={styles.detailLabel}>Store Images:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageGallery}>
+                      {currentStore.verification_images.map((img: string, idx: number) => (
+                        <TouchableOpacity key={idx} onPress={() => handleContact('browser', img)}>
+                          <Image source={{ uri: img }} style={styles.verificationImage} />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Icon name="package-variant" size={64} color={Colors.border} />
-                  <Text style={styles.emptyText}>No products available right now.</Text>
+
+              <View style={styles.infoDivider} />
+
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Business Information</Text>
+                <View style={styles.verificationDetail}>
+                  <Text style={styles.detailLabel}>UPI ID:</Text>
+                  <Text style={styles.detailValue}>{currentStore.upi_id || 'Not provided'}</Text>
                 </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.infoSection}>
-              <View style={styles.infoCard}>
-                <View style={styles.verificationSection}>
-                  <Text style={styles.infoLabel}>Owner Information</Text>
-                  
-                  <View style={styles.verificationDetail}>
-                    <Text style={styles.detailLabel}>Owner Name:</Text>
-                    <Text style={styles.detailValue}>{currentStore.owner_name || 'Not provided'}</Text>
-                  </View>
-                  
-                  <View style={styles.verificationDetail}>
-                    <Text style={styles.detailLabel}>Owner Number:</Text>
-                    <TouchableOpacity onPress={() => handleContact('tel', currentStore.owner_number)}>
-                      <Text style={[styles.detailValue, { color: Colors.primary }]}>{currentStore.owner_number || 'Not provided'}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {!currentStore.is_active && currentStore.verification_images && currentStore.verification_images.length > 0 && (
-                    <View style={styles.imagesContainer}>
-                      <Text style={styles.detailLabel}>Store Images:</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageGallery}>
-                        {currentStore.verification_images.map((img: string, idx: number) => (
-                          <TouchableOpacity key={idx} onPress={() => handleContact('browser', img)}>
-                            <Image source={{ uri: img }} style={styles.verificationImage} />
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
+                <View style={styles.verificationDetail}>
+                  <Text style={styles.detailLabel}>Email:</Text>
+                  <Text style={styles.detailValue}>{currentStore.email || 'Not provided'}</Text>
                 </View>
+              </View>
 
-                <View style={styles.infoDivider} />
+              <View style={styles.infoDivider} />
 
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Business Information</Text>
-                  <View style={styles.verificationDetail}>
-                    <Text style={styles.detailLabel}>UPI ID:</Text>
-                    <Text style={styles.detailValue}>{currentStore.upi_id || 'Not provided'}</Text>
-                  </View>
-                  <View style={styles.verificationDetail}>
-                    <Text style={styles.detailLabel}>Email:</Text>
-                    <Text style={styles.detailValue}>{currentStore.email || 'Not provided'}</Text>
-                  </View>
-                </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>About the Store</Text>
+                <Text style={styles.infoValue}>
+                  {currentStore.description || 'Quality products from your neighborhood store.'}
+                </Text>
+              </View>
 
-                <View style={styles.infoDivider} />
+              <View style={styles.infoDivider} />
 
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>About the Store</Text>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Operating Hours</Text>
+                <View style={styles.infoRow}>
+                  <Icon name="clock-outline" size={18} color={Colors.primary} />
                   <Text style={styles.infoValue}>
-                    {currentStore.description || 'Quality products from your neighborhood store.'}
+                    {renderFormattedValue('opening_hours', currentStore.opening_hours) !== 'Not set' ? 
+                      renderFormattedValue('opening_hours', currentStore.opening_hours) : 
+                      'Contact store for timings'}
                   </Text>
                 </View>
+              </View>
 
-                <View style={styles.infoDivider} />
+              <View style={styles.infoDivider} />
 
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Operating Hours</Text>
-                  <View style={styles.infoRow}>
-                    <Icon name="clock-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.infoValue}>
-                      {renderFormattedValue('opening_hours', currentStore.opening_hours) !== 'Not set' ? 
-                        renderFormattedValue('opening_hours', currentStore.opening_hours) : 
-                        'Contact store for timings'}
-                    </Text>
-                  </View>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Live Location</Text>
+                <View style={styles.infoRow}>
+                  <Icon name="crosshairs-gps" size={18} color={Colors.primary} />
+                  <Text style={styles.infoValue}>
+                    {currentStore.location_wkt ? 
+                      currentStore.location_wkt.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ') : 
+                      'Fetching latest coordinates...'}
+                  </Text>
                 </View>
-
-                <View style={styles.infoDivider} />
-
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Live Location</Text>
-                  <View style={styles.infoRow}>
-                    <Icon name="crosshairs-gps" size={18} color={Colors.primary} />
-                    <Text style={styles.infoValue}>
-                      {currentStore.location_wkt ? 
-                        currentStore.location_wkt.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ') : 
-                        'Fetching latest coordinates...'}
-                    </Text>
-                  </View>
-                  
-                  {currentStore.location_wkt && (
-                    <TouchableOpacity 
-                      style={styles.mapLink}
-                      onPress={() => {
-                        const match = currentStore.location_wkt.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-                        if (match) {
-                          const lng = match[1];
-                          const lat = match[2];
-                          const url = Platform.select({
-                            ios: `maps:0,0?q=${currentStore.name}@${lat},${lng}`,
-                            android: `geo:0,0?q=${lat},${lng}(${currentStore.name})`
-                          });
-                          if (url) Linking.openURL(url);
-                        }
-                      }}
-                    >
-                      <Icon name="google-maps" size={16} color={Colors.primary} />
-                      <Text style={styles.mapLinkText}>View on Map</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.infoDivider} />
-
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Address</Text>
-                  <View style={styles.infoRow}>
-                    <Icon name="map-marker-outline" size={18} color={Colors.error} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.infoValue}>
-                        {(currentStore.address_line_1 || currentStore.address) || 'Not provided'}
-                        {currentStore.pincode ? ` - ${currentStore.pincode}` : ''}
-                        {currentStore.city ? `\n${currentStore.city}` : ''}
-                        {currentStore.state ? `, ${currentStore.state}` : ''}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {(store.phone || store.email || store.whatsapp_number) && (
-                  <>
-                    <View style={styles.infoDivider} />
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Contact Information</Text>
-                      <View style={styles.contactActions}>
-                        {store.phone && (
-                          <TouchableOpacity 
-                            style={styles.contactButton} 
-                            onPress={() => handleContact('tel', store.phone)}
-                          >
-                            <Icon name="phone" size={18} color={Colors.white} />
-                            <Text style={styles.contactButtonText}>Call</Text>
-                          </TouchableOpacity>
-                        )}
-                        {store.whatsapp_number && (
-                          <TouchableOpacity 
-                            style={[styles.contactButton, { backgroundColor: '#25D366' }]} 
-                            onPress={() => handleContact('whatsapp', store.whatsapp_number)}
-                          >
-                            <Icon name="whatsapp" size={18} color={Colors.white} />
-                            <Text style={styles.contactButtonText}>WhatsApp</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  </>
-                )}
-
-                {(store.instagram_url || store.facebook_url) && (
-                  <>
-                    <View style={styles.infoDivider} />
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Social Media</Text>
-                      <View style={styles.socialRow}>
-                        {store.instagram_url && (
-                          <TouchableOpacity 
-                            style={styles.socialButton}
-                            onPress={() => handleContact('browser', store.instagram_url)}
-                          >
-                            <Icon name="instagram" size={24} color="#E4405F" />
-                          </TouchableOpacity>
-                        )}
-                        {store.facebook_url && (
-                          <TouchableOpacity 
-                            style={styles.socialButton}
-                            onPress={() => handleContact('browser', store.facebook_url)}
-                          >
-                            <Icon name="facebook" size={24} color="#1877F2" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  </>
+                
+                {currentStore.location_wkt && (
+                  <TouchableOpacity 
+                    style={styles.mapLink}
+                    onPress={() => {
+                      const match = currentStore.location_wkt.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+                      if (match) {
+                        const lng = match[1];
+                        const lat = match[2];
+                        const url = Platform.select({
+                          ios: `maps:0,0?q=${currentStore.name}@${lat},${lng}`,
+                          android: `geo:0,0?q=${lat},${lng}(${currentStore.name})`
+                        });
+                        if (url) Linking.openURL(url);
+                      }
+                    }}
+                  >
+                    <Icon name="google-maps" size={16} color={Colors.primary} />
+                    <Text style={styles.mapLinkText}>View on Map</Text>
+                  </TouchableOpacity>
                 )}
               </View>
-              <View style={{ height: 10 }} />
+
+              <View style={styles.infoDivider} />
+
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Address</Text>
+                <View style={styles.infoRow}>
+                  <Icon name="map-marker-outline" size={18} color={Colors.error} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.infoValue}>
+                      {(currentStore.address_line_1 || currentStore.address) || 'Not provided'}
+                      {currentStore.pincode ? ` - ${currentStore.pincode}` : ''}
+                      {currentStore.city ? `\n${currentStore.city}` : ''}
+                      {currentStore.state ? `, ${currentStore.state}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {(store.phone || store.email || store.whatsapp_number) && (
+                <>
+                  <View style={styles.infoDivider} />
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Contact Information</Text>
+                    <View style={styles.contactActions}>
+                      {store.phone && (
+                        <TouchableOpacity 
+                          style={styles.contactButton} 
+                          onPress={() => handleContact('tel', store.phone)}
+                        >
+                          <Icon name="phone" size={18} color={Colors.white} />
+                          <Text style={styles.contactButtonText}>Call</Text>
+                        </TouchableOpacity>
+                      )}
+                      {store.whatsapp_number && (
+                        <TouchableOpacity 
+                          style={[styles.contactButton, { backgroundColor: '#25D366' }]} 
+                          onPress={() => handleContact('whatsapp', store.whatsapp_number)}
+                        >
+                          <Icon name="whatsapp" size={18} color={Colors.white} />
+                          <Text style={styles.contactButtonText}>WhatsApp</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </>
+              )}
+
+              {(store.instagram_url || store.facebook_url) && (
+                <>
+                  <View style={styles.infoDivider} />
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Social Media</Text>
+                    <View style={styles.socialRow}>
+                      {store.instagram_url && (
+                        <TouchableOpacity 
+                          style={styles.socialButton}
+                          onPress={() => handleContact('browser', store.instagram_url)}
+                        >
+                          <Icon name="instagram" size={24} color="#E4405F" />
+                        </TouchableOpacity>
+                      )}
+                      {store.facebook_url && (
+                        <TouchableOpacity 
+                          style={styles.socialButton}
+                          onPress={() => handleContact('browser', store.facebook_url)}
+                        >
+                          <Icon name="facebook" size={24} color="#1877F2" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
-          )}
+            <View style={{ height: 10 }} />
+          </View>
         </View>
       </ScrollView>
 

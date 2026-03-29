@@ -9,14 +9,11 @@ import {StatusBar, useColorScheme} from 'react-native';
 import DashboardScreen from './src/screens/DashboardScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import DeliveriesScreen from './src/screens/DeliveriesScreen';
-import ProductsScreen from './src/screens/ProductsScreen';
-import ProductDetailsScreen from './src/screens/ProductDetailsScreen';
 import PaymentsScreen from './src/screens/PaymentsScreen';
 import StoresScreen from './src/screens/StoresScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import StoreDetailsScreen from './src/screens/StoreDetailsScreen';
-import ImagesScreen from './src/screens/ImagesScreen';
 import RidersScreen from './src/screens/RidersScreen';
 
 
@@ -96,20 +93,7 @@ function App() {
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="MainTabs" component={TabNavigator} />
-            <Stack.Screen 
-              name="ProductDetails" 
-              component={ProductDetailsScreen}
-              options={{ 
-                headerShown: true, 
-                headerTitle: 'Product Details',
-                headerBackTitle: '' 
-              }}
-            />
-            <Stack.Screen 
-              name="Products" 
-              component={ProductsScreen}
-              options={{ headerShown: true, headerTitle: 'Products', headerBackTitle: '' }}
-            />
+
             <Stack.Screen 
               name="Payments" 
               component={PaymentsScreen}
@@ -130,11 +114,7 @@ function App() {
               component={StoreDetailsScreen}
               options={{ headerShown: false }}
             />
-            <Stack.Screen 
-              name="Images" 
-              component={ImagesScreen}
-              options={{ headerShown: true, headerTitle: 'Manage Images', headerBackTitle: '' }}
-            />
+
             <Stack.Screen 
               name="Riders" 
               component={RidersScreen}
