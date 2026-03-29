@@ -28,6 +28,8 @@ interface Order {
   total_amount: number;
   payment_method: string;
   payment_status: string;
+  utr_number?: string;
+  payer_name?: string;
   store_id: string;
   rider_id: string | null;
   delivery_address_id: string;
@@ -263,8 +265,14 @@ const DeliveriesScreen = () => {
               styles.paymentValue,
               { color: item.payment_status === 'verified' ? '#27ae60' : '#f39c12' }
             ]}>
-              {item.payment_method === 'pay_now' ? 'Pay Now' : 'Pay on Delivery'} • {item.payment_status === 'verified' ? 'Received' : 'Not Received'}
+              {item.payment_method === 'pay_online' ? 'Pay Online' : 'Pay on Delivery'} • {item.payment_status === 'verified' ? 'Received' : 'Not Received'}
             </Text>
+            {item.utr_number && (
+              <Text style={styles.paymentMetaText}>UTR: {item.utr_number}</Text>
+            )}
+            {item.payer_name && (
+              <Text style={styles.paymentMetaText}>Payer: {item.payer_name}</Text>
+            )}
          </View>
          <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
       </View>
@@ -487,6 +495,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#3a3a3c',
+    marginTop: 2,
+  },
+  paymentMetaText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8e8e93',
     marginTop: 2,
   },
   totalAmount: {

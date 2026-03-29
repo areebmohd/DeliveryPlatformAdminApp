@@ -8,6 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  Switch,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
@@ -28,6 +29,7 @@ interface Order {
   total_amount: number;
   payment_method: string;
   payment_status: string;
+  utr_number?: string;
   stores: {
     name: string;
   };
@@ -44,6 +46,8 @@ const OrdersScreen = () => {
   const [sections, setSections] = useState<OrderSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isOnlineEnabled, setIsOnlineEnabled] = useState(true);
+  const [toggling, setToggling] = useState(false);
 
   const groupOrdersByDate = (orders: Order[]) => {
     const groups: {[key: string]: Order[]} = {};
@@ -79,6 +83,39 @@ const OrdersScreen = () => {
     }));
   };
 
+  const fetchSettings = async () => {
+    try {
+      const {data, error} = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'pay_online_enabled')
+        .single();
+      if (!error && data) {
+        setIsOnlineEnabled(data.value);
+      }
+    } catch (e) {
+      console.error('Error fetching settings:', e);
+    }
+  };
+
+  const toggleOnlinePayment = async (newValue: boolean) => {
+    try {
+      setToggling(true);
+      const {error} = await supabase
+        .from('system_settings')
+        .update({value: newValue})
+        .eq('key', 'pay_online_enabled');
+      
+      if (error) throw error;
+      setIsOnlineEnabled(newValue);
+      showToast(`Online payments ${newValue ? 'enabled' : 'disabled'}`, 'success');
+    } catch (e: any) {
+      showAlert({title: 'Error', message: e.message, type: 'error'});
+    } finally {
+      setToggling(false);
+    }
+  };
+
   const fetchOrders = async () => {
     try {
       console.log('Fetching orders...');
@@ -106,6 +143,7 @@ const OrdersScreen = () => {
 
   useEffect(() => {
     fetchOrders();
+    fetchSettings();
   }, []);
 
   const onRefresh = () => {
@@ -242,6 +280,12 @@ const OrdersScreen = () => {
               <Text style={styles.paymentPendingText}> • {item.payment_status}</Text>
             )}
           </View>
+          {item.utr_number && item.payment_method === 'pay_online' && (
+            <View style={styles.utrRow}>
+              <Text style={styles.utrLabel}>UTR:</Text>
+              <Text style={styles.utrValue}>{item.utr_number}</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
       </View>
@@ -272,6 +316,28 @@ const OrdersScreen = () => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.toggleContainer}>
+        <View style={styles.toggleInfo}>
+          <Icon 
+            name={isOnlineEnabled ? "flash" : "flash-off"} 
+            size={20} 
+            color={isOnlineEnabled ? "#007AFF" : "#666"} 
+          />
+          <View style={{marginLeft: 10}}>
+            <Text style={styles.toggleTitle}>Allow Online Payments</Text>
+            <Text style={styles.toggleSubtitle}>
+              {isOnlineEnabled ? "Customers can pay via UPI" : "Customers can only use COD"}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={isOnlineEnabled}
+          onValueChange={toggleOnlinePayment}
+          trackColor={{false: '#d1d1d1', true: '#cce4ff'}}
+          thumbColor={isOnlineEnabled ? '#007AFF' : '#f4f3f4'}
+          disabled={toggling}
+        />
+      </View>
       <SectionList
         sections={sections}
         renderItem={renderOrderItem}
@@ -439,6 +505,58 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 5,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  toggleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  toggleTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  toggleSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 1,
+  },
+  utrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#f0f7ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  utrLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginRight: 4,
+  },
+  utrValue: {
+    fontSize: 11,
+    color: '#333',
+    fontWeight: '600',
   },
 });
 
