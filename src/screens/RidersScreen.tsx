@@ -70,6 +70,7 @@ const RidersScreen = () => {
         .order('full_name', {ascending: true});
 
       if (error) throw (error as any);
+      console.log('Fetched riders data:', JSON.stringify(data, null, 2));
       setRiders((data as any) || []);
     } catch (error: any) {
       showAlert({title: 'Error', message: error.message, type: 'error'});
@@ -117,13 +118,13 @@ const RidersScreen = () => {
           <View style={styles.detailItem}>
             <Icon name="bicycle-outline" size={16} color="#666" />
             <Text style={styles.detailText}>
-              {riderProfile?.vehicle_type || 'N/A'}
+              {riderProfile?.vehicle_type || 'Vehicle not set'}
             </Text>
           </View>
           <View style={styles.detailItem}>
             <Icon name="card-outline" size={16} color="#666" />
             <Text style={styles.detailText}>
-              {riderProfile?.vehicle_number || 'N/A'}
+              {riderProfile?.vehicle_number || 'No number'}
             </Text>
           </View>
         </View>
