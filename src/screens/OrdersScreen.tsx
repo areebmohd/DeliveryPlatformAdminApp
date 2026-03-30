@@ -290,13 +290,16 @@ const OrdersScreen = () => {
         <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
       </View>
 
-      {item.payment_status !== 'verified' && (
-        <TouchableOpacity
-          style={styles.verifyButton}
-          onPress={() => handleVerifyPayment(item.id, item.order_number)}>
-          <Text style={styles.verifyButtonText}>Payment Received</Text>
-        </TouchableOpacity>
-      )}
+      {item.payment_status !== 'verified' &&
+        !(
+          item.status === 'cancelled' && item.payment_method === 'pay_on_delivery'
+        ) && (
+          <TouchableOpacity
+            style={styles.verifyButton}
+            onPress={() => handleVerifyPayment(item.id, item.order_number)}>
+            <Text style={styles.verifyButtonText}>Payment Received</Text>
+          </TouchableOpacity>
+        )}
     </View>
   );
 
