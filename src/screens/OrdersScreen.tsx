@@ -46,8 +46,6 @@ const OrdersScreen = () => {
   const [sections, setSections] = useState<OrderSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isOnlineEnabled, setIsOnlineEnabled] = useState(true);
-  const [toggling, setToggling] = useState(false);
 
   const groupOrdersByDate = (orders: Order[]) => {
     const groups: {[key: string]: Order[]} = {};
@@ -83,38 +81,6 @@ const OrdersScreen = () => {
     }));
   };
 
-  const fetchSettings = async () => {
-    try {
-      const {data, error} = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'pay_online_enabled')
-        .single();
-      if (!error && data) {
-        setIsOnlineEnabled(data.value);
-      }
-    } catch (e) {
-      console.error('Error fetching settings:', e);
-    }
-  };
-
-  const toggleOnlinePayment = async (newValue: boolean) => {
-    try {
-      setToggling(true);
-      const {error} = await supabase
-        .from('system_settings')
-        .update({value: newValue})
-        .eq('key', 'pay_online_enabled');
-      
-      if (error) throw error;
-      setIsOnlineEnabled(newValue);
-      showToast(`Online payments ${newValue ? 'enabled' : 'disabled'}`, 'success');
-    } catch (e: any) {
-      showAlert({title: 'Error', message: e.message, type: 'error'});
-    } finally {
-      setToggling(false);
-    }
-  };
 
   const fetchOrders = async () => {
     try {
@@ -143,7 +109,7 @@ const OrdersScreen = () => {
 
   useEffect(() => {
     fetchOrders();
-    fetchSettings();
+    fetchOrders();
   }, []);
 
   const onRefresh = () => {
@@ -319,28 +285,6 @@ const OrdersScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.toggleContainer}>
-        <View style={styles.toggleInfo}>
-          <Icon 
-            name={isOnlineEnabled ? "flash" : "flash-off"} 
-            size={20} 
-            color={isOnlineEnabled ? "#007AFF" : "#666"} 
-          />
-          <View style={{marginLeft: 10}}>
-            <Text style={styles.toggleTitle}>Allow Online Payments</Text>
-            <Text style={styles.toggleSubtitle}>
-              {isOnlineEnabled ? "Customers can pay via UPI" : "Customers can only use COD"}
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={isOnlineEnabled}
-          onValueChange={toggleOnlinePayment}
-          trackColor={{false: '#d1d1d1', true: '#cce4ff'}}
-          thumbColor={isOnlineEnabled ? '#007AFF' : '#f4f3f4'}
-          disabled={toggling}
-        />
-      </View>
       <SectionList
         sections={sections}
         renderItem={renderOrderItem}

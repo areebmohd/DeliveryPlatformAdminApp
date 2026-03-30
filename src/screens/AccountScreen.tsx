@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,56 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
+  Switch,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { supabase } from '../services/supabaseClient';
+import { useAlert } from '../context/AlertContext';
+import { Colors } from '../theme/colors';
 
 const AccountScreen = () => {
   const navigation = useNavigation<any>();
+  const { showAlert, showToast } = useAlert();
+  const [isOnlineEnabled, setIsOnlineEnabled] = useState(true);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'pay_online_enabled')
+        .single();
+      if (!error && data) {
+        setIsOnlineEnabled(data.value);
+      }
+    } catch (e) {
+      console.error('Error fetching settings:', e);
+    }
+  };
+
+  const toggleOnlinePayment = async (newValue: boolean) => {
+    try {
+      setToggling(true);
+      // Use the RPC function to bypass RLS for the static admin app
+      const { error } = await supabase.rpc('set_online_payments_enabled', {
+        p_enabled: newValue,
+      });
+
+      if (error) throw error;
+      setIsOnlineEnabled(newValue);
+      showToast(`Online payments ${newValue ? 'enabled' : 'disabled'}`, 'success');
+    } catch (e: any) {
+      showAlert({ title: 'Error', message: e.message, type: 'error' });
+    } finally {
+      setToggling(false);
+    }
+  };
 
   const menuItems = [
     {
@@ -81,6 +125,28 @@ const AccountScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* System Management Box */}
+        <View style={styles.menuContainer}>
+          <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <Icon name={isOnlineEnabled ? "flash" : "flash-off"} size={24} color={isOnlineEnabled ? "#007AFF" : "#666"} />
+              <View>
+                <Text style={styles.menuItemTitle}>Allow Online Payments</Text>
+                <Text style={styles.menuItemSubtitle}>
+                  {isOnlineEnabled ? "Customers can pay via UPI" : "Customers can only use COD"}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={isOnlineEnabled}
+              onValueChange={toggleOnlinePayment}
+              trackColor={{ false: '#d1d1d1', true: '#cce4ff' }}
+              thumbColor={isOnlineEnabled ? '#007AFF' : '#f4f3f4'}
+              disabled={toggling}
+            />
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -114,6 +180,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#eee',
     marginTop: 10,
+    marginBottom: 10,
   },
   adminInfoCard: {
     backgroundColor: '#fff',
@@ -178,8 +245,15 @@ const styles = StyleSheet.create({
   },
   menuItemTitle: {
     fontSize: 16,
-    marginLeft: 15,
     color: '#333',
+    fontWeight: '600',
+    marginLeft: 15,
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+    marginLeft: 15,
   },
 });
 
