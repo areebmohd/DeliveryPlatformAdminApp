@@ -28,31 +28,57 @@ const PaymentsScreen = () => {
   const [activeTab, setActiveTab] = useState<PayoutType>('store');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  // UTR Modal states
-  const [utrModalVisible, setUtrModalVisible] = useState(false);
-  const [currentPayoutGroup, setCurrentPayoutGroup] = useState<any>(null);
-  const [utrNumber, setUtrNumber] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const { showAlert, showToast } = useAlert();
 
   const fetchPayouts = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      // 1. Fetch raw payouts
+      const { data: payoutsData, error: payoutsError } = await supabase
         .from('payouts')
         .select(`
           *,
-          store:recipient_id (id, name, upi_id, phone),
-          rider:recipient_id (id, full_name, upi_id, phone),
-          customer:recipient_id (id, full_name, upi_id, phone),
           order:order_id (order_number)
         `)
         .eq('recipient_type', activeTab)
         .order('payment_date', { ascending: false });
 
-      if (error) throw error;
-      setPayouts(data || []);
+      if (payoutsError) throw payoutsError;
+
+      if (!payoutsData || payoutsData.length === 0) {
+        setPayouts([]);
+        return;
+      }
+
+      // 2. Fetch recipient details based on type
+      const recipientIds = [...new Set(payoutsData.map(p => p.recipient_id))];
+      let enrichedPayouts = [...payoutsData];
+
+      if (activeTab === 'store') {
+        const { data: stores } = await supabase
+          .from('stores')
+          .select('id, name, upi_id, phone')
+          .in('id', recipientIds);
+        
+        enrichedPayouts = payoutsData.map(p => ({
+          ...p,
+          recipient: stores?.find(s => s.id === p.recipient_id)
+        }));
+      } else {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, upi_id, phone')
+          .in('id', recipientIds);
+        
+        enrichedPayouts = payoutsData.map(p => ({
+          ...p,
+          recipient: profiles?.find(pr => pr.id === p.recipient_id)
+        }));
+      }
+
+      setPayouts(enrichedPayouts);
     } catch (error: any) {
       console.error('Error fetching payouts:', error);
       showToast('Error fetching payouts', 'error');
@@ -74,7 +100,7 @@ const PaymentsScreen = () => {
   const generatePayouts = async () => {
     try {
       setIsGenerating(true);
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
 
       // 1. Fetch delivered orders that aren't in payouts yet
       const { data: orders, error: ordersError } = await supabase
@@ -86,9 +112,10 @@ const PaymentsScreen = () => {
           total_amount, 
           delivery_fee, 
           rider_id,
-          user_id,
+          customer_id,
+          store_id,
           created_at,
-          order_items(store_id, price, quantity)
+          order_items(product_price, quantity)
         `)
         .or(`status.eq.delivered,status.eq.cancelled`);
 
@@ -97,25 +124,23 @@ const PaymentsScreen = () => {
       const newPayouts: any[] = [];
 
       for (const order of orders) {
-        const orderDate = new Date(order.created_at).toISOString().split('T')[0];
+        const orderDate = new Date(order.created_at).toLocaleDateString('en-CA');
 
         // STORE PAYOUTS (Delivered orders)
-        if (order.status === 'delivered') {
-          const storeEarnings: Record<string, number> = {};
+        if (order.status === 'delivered' && order.store_id) {
+          let storeAmount = 0;
           order.order_items.forEach((item: any) => {
-            storeEarnings[item.store_id] = (storeEarnings[item.store_id] || 0) + (item.price * item.quantity);
+            storeAmount += (item.product_price * item.quantity);
           });
 
-          for (const [storeId, amount] of Object.entries(storeEarnings)) {
-            newPayouts.push({
-              recipient_id: storeId,
-              recipient_type: 'store',
-              order_id: order.id,
-              amount,
-              payment_date: orderDate,
-              status: 'pending'
-            });
-          }
+          newPayouts.push({
+            recipient_id: order.store_id,
+            recipient_type: 'store',
+            order_id: order.id,
+            amount: storeAmount,
+            payment_date: orderDate,
+            status: 'pending'
+          });
 
           // RIDER PAYOUTS (Delivered orders)
           if (order.rider_id) {
@@ -131,9 +156,9 @@ const PaymentsScreen = () => {
         }
 
         // CUSTOMER REFUNDS (Cancelled online orders)
-        if (order.status === 'cancelled' && order.payment_method === 'pay_online' && order.user_id) {
+        if (order.status === 'cancelled' && order.payment_method === 'pay_online' && order.customer_id) {
             newPayouts.push({
-                recipient_id: order.user_id,
+                recipient_id: order.customer_id,
                 recipient_type: 'customer',
                 order_id: order.id,
                 amount: order.total_amount,
@@ -184,16 +209,18 @@ const PaymentsScreen = () => {
       },
       async (response: any) => {
         try {
+          // Automated UTR fetching: check multiple common fields
+          const capturedUtr = response.txnId || response.ApprovalRefNo || response.txnRef || 'N/A';
           const { error } = await supabase
             .from('payouts')
             .update({ 
-                status: 'paid',
-                upi_transaction_id: response.txnId || 'N/A'
+                status: 'sent', // Mark as 'sent' (terminal state) automatically
+                upi_transaction_id: capturedUtr
             })
             .in('id', group.ids);
 
           if (error) throw error;
-          showToast('Batch payment recorded!', 'success');
+          showToast('Payment settled automatically!', 'success');
           fetchPayouts();
         } catch (e: any) {
           showToast('Updated partially: ' + e.message, 'error');
@@ -203,45 +230,16 @@ const PaymentsScreen = () => {
     );
   };
 
-  const openUtrModal = (group: any) => {
-    setCurrentPayoutGroup(group);
-    setUtrNumber(group.upiTransactionId || '');
-    setUtrModalVisible(true);
-  };
-
-  const confirmSent = async () => {
-    if (!utrNumber) {
-        showToast('Please enter the UTR or Transaction ID', 'info');
-        return;
-    }
-    
-    try {
-      setIsUpdatingStatus(true);
-      const { error } = await supabase
-        .from('payouts')
-        .update({ status: 'sent', upi_transaction_id: utrNumber })
-        .in('id', currentPayoutGroup.ids);
-
-      if (error) throw error;
-      showToast('Settlement completed!', 'success');
-      setUtrModalVisible(false);
-      fetchPayouts();
-    } catch (e: any) {
-      showAlert({ title: 'Error', message: e.message, type: 'error' });
-    } finally {
-        setIsUpdatingStatus(false);
-    }
-  };
 
   const consolidatePayouts = (data: any[]) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
     
     if (activeTab === 'customer') {
       // Individual refunds for customers
       return data.map(p => ({
         id: p.id,
         ids: [p.id],
-        recipient: p.customer,
+        recipient: p.recipient,
         amount: p.amount,
         totalAmount: p.amount,
         status: p.status,
@@ -249,7 +247,7 @@ const PaymentsScreen = () => {
         orderRef: p.order?.order_number,
         upiTransactionId: p.upi_transaction_id,
         isToday: p.payment_date === today,
-        canPay: true // Customers can always be refunded
+        canPay: true // Customers can canPay immediately
       }));
     }
 
@@ -260,9 +258,9 @@ const PaymentsScreen = () => {
       if (!groups[key]) {
         groups[key] = {
           ids: [],
-          recipient: activeTab === 'store' ? p.store : p.rider,
+          recipient: p.recipient,
           totalAmount: 0,
-          status: p.status, // We use the status of the first one, assuming they are consistent
+          status: p.status,
           paymentDate: p.payment_date,
           isToday: p.payment_date === today,
           upiTransactionId: p.upi_transaction_id,
@@ -272,7 +270,6 @@ const PaymentsScreen = () => {
       groups[key].totalAmount += parseFloat(p.amount);
       if (p.upi_transaction_id) groups[key].upiTransactionId = p.upi_transaction_id;
       
-      // If any of them are NOT 'sent', the group status should reflect that
       if (p.status !== groups[key].status && p.status === 'pending') {
           groups[key].status = 'pending';
       }
@@ -280,7 +277,7 @@ const PaymentsScreen = () => {
 
     return Object.values(groups).map(g => ({
         ...g,
-        canPay: !g.isToday // Buttons only appear for past days
+        canPay: !g.isToday // Buttons only appear for past days for Store/Rider
     }));
   };
 
@@ -356,8 +353,8 @@ const PaymentsScreen = () => {
                         
                         <View style={styles.badgeRow}>
                             <View style={[styles.badge, { backgroundColor: isSent ? Colors.success + '15' : isPaid ? Colors.info + '15' : Colors.warning + '15' }]}>
-                                <Text style={[styles.badgeText, { color: isSent ? Colors.success : isPaid ? Colors.info : Colors.warning }]}>
-                                    {group.isToday && group.status === 'pending' ? 'ACCUMULATING' : group.status.toUpperCase()}
+                                <Text style={[styles.badgeText, { color: isSent || isPaid ? Colors.success : Colors.warning }]}>
+                                    {group.isToday && group.status === 'pending' ? 'ACCUMULATING' : 'PAID'}
                                 </Text>
                             </View>
                             {group.upiTransactionId && <Text style={styles.utrLabel}>UTR: {group.upiTransactionId}</Text>}
@@ -365,20 +362,15 @@ const PaymentsScreen = () => {
 
                         {group.canPay && (
                             <View style={styles.actions}>
-                                {!isPaid ? (
+                                {!isPaid && !isSent ? (
                                     <TouchableOpacity style={[styles.actionBtn, {backgroundColor: Colors.primary}]} onPress={() => handleUpiPayment(group)}>
                                         <Text style={styles.actionBtnText}>Pay Total</Text>
                                     </TouchableOpacity>
                                 ) : (
                                     <View style={styles.paidBadge}>
-                                        <Icon name="checkmark-done" size={18} color={Colors.info} />
-                                        <Text style={styles.paidText}>Settled</Text>
+                                        <Icon name="checkmark-done" size={18} color={Colors.success} />
+                                        <Text style={styles.paidText}>Paid</Text>
                                     </View>
-                                )}
-                                {!isSent && (
-                                    <TouchableOpacity style={[styles.actionBtn, {backgroundColor: Colors.success}]} onPress={() => openUtrModal(group)}>
-                                        <Text style={styles.actionBtnText}>{activeTab === 'customer' ? 'Refund Sent' : 'Payment Sent'}</Text>
-                                    </TouchableOpacity>
                                 )}
                             </View>
                         )}
@@ -394,30 +386,6 @@ const PaymentsScreen = () => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* UTR / Confirmation Modal */}
-      <Modal visible={utrModalVisible} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Confirm Settlement</Text>
-                  <Text style={styles.modalSubtitle}>Enter the Transaction ID / UTR for this batch payment (₹{currentPayoutGroup?.totalAmount.toFixed(2)}).</Text>
-                  <TextInput 
-                    style={styles.utrInput} 
-                    placeholder="Enter UTR Number" 
-                    value={utrNumber} 
-                    onChangeText={setUtrNumber}
-                    autoCapitalize="characters"
-                  />
-                  <View style={styles.modalActions}>
-                      <TouchableOpacity style={styles.cancelBtn} onPress={() => setUtrModalVisible(false)}>
-                          <Text style={styles.cancelBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.confirmBtn} onPress={confirmSent} disabled={isUpdatingStatus}>
-                          {isUpdatingStatus ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.confirmBtnText}>Mark as Sent</Text>}
-                      </TouchableOpacity>
-                  </View>
-              </View>
-          </View>
-      </Modal>
     </View>
   );
 };
