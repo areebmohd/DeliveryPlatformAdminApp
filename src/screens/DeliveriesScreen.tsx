@@ -18,6 +18,7 @@ interface OrderItem {
   product_name: string;
   product_price: number;
   quantity: number;
+  selected_options?: {[key: string]: string};
 }
 
 interface Order {
@@ -257,6 +258,37 @@ const DeliveriesScreen = () => {
           </View>
         )}
       </View>
+
+      <View style={styles.divider} />
+      {/* Items Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Icon name="list" size={16} color="#555" />
+          <Text style={styles.sectionTitle}>Order Items</Text>
+        </View>
+        <View style={styles.itemsList}>
+          {item.order_items?.map((product: any) => (
+            <View key={product.id} style={styles.productRow}>
+              <Text style={styles.productName}>
+                {product.product_name}
+                {product.selected_options && Object.keys(product.selected_options).length > 0 && (
+                  <Text style={styles.itemOptionsText}>
+                    {` (${Object.entries(product.selected_options)
+                      .map(([k, v]) => `${v}`)
+                      .join(', ')})`}
+                  </Text>
+                )}
+                {' '}x{product.quantity}
+              </Text>
+              <Text style={styles.productPrice}>
+                ₹{(product.product_price * product.quantity).toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
          <View style={styles.paymentMethod}>
@@ -513,6 +545,30 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 12,
     fontWeight: '600',
+  },
+  itemsList: {
+    marginTop: 4,
+  },
+  productRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  productName: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '700',
+    flex: 1,
+  },
+  itemOptionsText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  productPrice: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '500',
   },
 });
 

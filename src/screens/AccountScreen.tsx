@@ -19,6 +19,7 @@ const AccountScreen = () => {
   const { showAlert, showToast } = useAlert();
   const [isOnlineEnabled, setIsOnlineEnabled] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
     fetchSettings();
@@ -26,6 +27,7 @@ const AccountScreen = () => {
 
   const fetchSettings = async () => {
     try {
+      setLoadingSettings(true);
       const { data, error } = await supabase
         .from('system_settings')
         .select('value')
@@ -33,9 +35,13 @@ const AccountScreen = () => {
         .single();
       if (!error && data) {
         setIsOnlineEnabled(data.value);
+      } else if (error) {
+        console.error('Error fetching settings:', error);
       }
     } catch (e) {
       console.error('Error fetching settings:', e);
+    } finally {
+      setLoadingSettings(false);
     }
   };
 
@@ -143,7 +149,7 @@ const AccountScreen = () => {
               onValueChange={toggleOnlinePayment}
               trackColor={{ false: '#d1d1d1', true: '#cce4ff' }}
               thumbColor={isOnlineEnabled ? '#007AFF' : '#f4f3f4'}
-              disabled={toggling}
+              disabled={toggling || loadingSettings}
             />
           </View>
         </View>

@@ -19,6 +19,7 @@ interface OrderItem {
   product_name: string;
   product_price: number;
   quantity: number;
+  selected_options?: {[key: string]: string};
 }
 
 interface Order {
@@ -87,7 +88,7 @@ const OrdersScreen = () => {
       console.log('Fetching orders...');
       const {data, error} = await supabase
         .from('orders')
-        .select('*, stores(name), order_items(*, products(stores(name)))')
+        .select('*, stores(name), order_items(*, selected_options, products(stores(name)))')
         .order('created_at', {ascending: false});
 
       if (error) {
@@ -220,7 +221,15 @@ const OrdersScreen = () => {
         {item.order_items.map((product) => (
           <View key={product.id} style={styles.productRow}>
             <Text style={styles.productName}>
-              {product.product_name} x{product.quantity}
+              {product.product_name}
+              {product.selected_options && Object.keys(product.selected_options).length > 0 && (
+                <Text style={styles.itemOptionsText}>
+                  {` (${Object.entries(product.selected_options)
+                    .map(([k, v]) => `${v}`)
+                    .join(', ')})`}
+                </Text>
+              )}
+              {' '}x{product.quantity}
             </Text>
             <Text style={styles.productPrice}>
               ₹{(product.product_price * product.quantity).toFixed(2)}
@@ -395,7 +404,14 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontSize: 13,
-    color: '#555',
+    color: '#333',
+    fontWeight: '700',
+    flex: 1,
+  },
+  itemOptionsText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   productPrice: {
     fontSize: 13,
