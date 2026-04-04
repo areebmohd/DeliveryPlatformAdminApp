@@ -289,6 +289,16 @@ const PaymentsScreen = () => {
   }, {});
   
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
+  
+  const dailyTotalPayouts = React.useMemo(() => {
+    const totals: Record<string, number> = {};
+    Object.keys(groupedByDate).forEach(date => {
+      totals[date] = groupedByDate[date].reduce((sum, item) => {
+        return sum + item.totalAmount;
+      }, 0);
+    });
+    return totals;
+  }, [groupedByDate]);
 
   return (
     <View style={styles.container}>
@@ -333,9 +343,18 @@ const PaymentsScreen = () => {
         ) : sortedDates.length > 0 ? sortedDates.map(date => (
           <View key={date}>
             <View style={styles.dateHeader}>
-              <Text style={styles.dateText}>{new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+              <Text style={styles.dateText}>
+                {new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              </Text>
               <View style={styles.dateLine} />
             </View>
+            
+            {dailyTotalPayouts[date] > 0 && (
+              <View style={styles.dailyTotalBox}>
+                <Text style={styles.dailyTotalAmount}>₹{dailyTotalPayouts[date].toFixed(0)}</Text>
+                <Text style={styles.dailyTotalTitle}>TOTAL PAYOUT</Text>
+              </View>
+            )}
             {groupedByDate[date].map((group, idx) => {
                 const isPaid = group.status === 'paid' || group.status === 'sent';
                 const isSent = group.status === 'sent';
@@ -438,6 +457,29 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 15, marginBottom: 10, gap: 10 },
   dateText: { fontSize: 12, fontWeight: '900', color: Colors.textSecondary, textTransform: 'uppercase' },
+  dailyTotalBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0EEFE',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#B0D5FD',
+  },
+  dailyTotalTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#007AFF',
+    marginLeft: 6,
+  },
+  dailyTotalAmount: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#007AFF',
+  },
   dateLine: { flex: 1, height: 1, backgroundColor: Colors.border + '50' },
   card: { backgroundColor: Colors.white, borderRadius: 16, padding: 16, marginBottom: 16, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

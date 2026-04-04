@@ -48,6 +48,7 @@ interface Order {
   delivery_fee?: number;
   platform_fee?: number;
   helper_fee?: number;
+  transport_type?: string;
 }
 
 interface OrderSection {
@@ -201,6 +202,7 @@ const OrdersScreen = () => {
               hour: '2-digit',
               minute: '2-digit',
             })}
+            {item.transport_type && ` • ${item.transport_type === 'heavy' ? 'Truck' : 'Bike'}`}
           </Text>
         </View>
         <View
@@ -214,105 +216,109 @@ const OrdersScreen = () => {
 
       <View style={styles.divider} />
 
-      <View style={styles.storeContainer}>
-        <Icon name="storefront-outline" size={16} color="#666" />
-        <Text style={styles.storeName}>
-          {(() => {
-            const storeNames = [...new Set(item.order_items?.map((oi: any) => oi.products?.stores?.name || item.stores?.name).filter(Boolean))];
-            return storeNames.join(', ') || 'Unknown Store';
-          })()}
-        </Text>
-      </View>
-
       <View style={styles.itemsList}>
-        {item.order_items.map((product) => {
-          const storeId = product.products?.store_id || item.stores?.id || item.store_id;
-          const storeOffer = item.applied_offers?.[storeId];
-          const hasStoreWideDiscount = storeOffer && (storeOffer.type === 'discount' || storeOffer.type === 'free_cash');
+        {(() => {
+          // Group items by store
+          const itemsByStore: {[key: string]: {name: string, items: OrderItem[]}} = {};
           
-          let discountedUnitPrice = product.product_price;
-          if (storeOffer?.type === 'discount') {
-            discountedUnitPrice = product.product_price * (1 - storeOffer.amount / 100);
-          } else if (storeOffer?.type === 'free_cash') {
-            const totalStoreAmount = item.order_items
-              .filter((oi: any) => oi.products?.store_id === storeId)
-              .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
-            const proportion = (product.product_price * product.quantity) / totalStoreAmount;
-            discountedUnitPrice = (product.product_price * product.quantity - storeOffer.amount * proportion) / product.quantity;
-          }
+          item.order_items.forEach((oi: any) => {
+            const storeId = oi.products?.store_id || item.stores?.id || item.store_id || 'unknown';
+            const storeName = oi.products?.stores?.name || item.stores?.name || 'Unknown Store';
+            
+            if (!itemsByStore[storeId]) {
+              itemsByStore[storeId] = { name: storeName, items: [] };
+            }
+            itemsByStore[storeId].items.push(oi);
+          });
 
-          return (
-            <View key={product.id} style={styles.productRow}>
-              <View style={{flex: 1}}>
-                <Text style={styles.productName}>
-                  {product.product_name}
-                  {product.selected_options && Object.keys(product.selected_options).length > 0 && (
-                    <Text style={styles.itemOptionsText}>
-                      {` (${Object.entries(product.selected_options)
-                        .map(([k, v]) => `${v}`)
-                        .join(', ')})`}
-                    </Text>
-                  )}
-                  {' '}x{product.quantity}
-                </Text>
-              </View>
-              <View style={{alignItems: 'flex-end'}}>
-                {hasStoreWideDiscount ? (
-                  <>
-                    <Text style={[styles.productPrice, {textDecorationLine: 'line-through', color: '#999', fontSize: 11}]}>
-                      ₹{(product.product_price * product.quantity).toFixed(2)}
-                    </Text>
-                    <Text style={[styles.productPrice, {color: '#27ae60', fontWeight: 'bold'}]}>
-                      ₹{(discountedUnitPrice * product.quantity).toFixed(2)}
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={styles.productPrice}>
-                    ₹{(product.product_price * product.quantity).toFixed(2)}
-                  </Text>
+          return Object.entries(itemsByStore).map(([storeId, storeData], sIdx) => {
+            const storeOffer = item.applied_offers?.[storeId];
+            
+            return (
+              <View key={storeId} style={sIdx > 0 ? {marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0'} : {}}>
+                <View style={styles.storeContainer}>
+                  <Icon name="storefront-outline" size={14} color="#666" />
+                  <Text style={[styles.storeName, {fontSize: 12}]}>{storeData.name}</Text>
+                </View>
+                
+                {storeData.items.map((product) => {
+                  const hasStoreWideDiscount = storeOffer && (storeOffer.type === 'discount' || storeOffer.type === 'free_cash');
+                  
+                  let discountedUnitPrice = product.product_price;
+                  if (storeOffer?.type === 'discount') {
+                    discountedUnitPrice = product.product_price * (1 - storeOffer.amount / 100);
+                  } else if (storeOffer?.type === 'free_cash') {
+                    const totalStoreAmount = storeData.items
+                      .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
+                    const proportion = (product.product_price * product.quantity) / (totalStoreAmount || 1);
+                    discountedUnitPrice = (product.product_price * product.quantity - storeOffer.amount * proportion) / product.quantity;
+                  }
+
+                  return (
+                    <View key={product.id} style={styles.productRow}>
+                      <View style={{flex: 1}}>
+                        <Text style={styles.productName}>
+                          {product.product_name}
+                          {product.selected_options && Object.keys(product.selected_options).length > 0 && (
+                            <Text style={styles.itemOptionsText}>
+                              {` (${Object.entries(product.selected_options)
+                                .map(([k, v]) => `${v}`)
+                                .join(', ')})`}
+                            </Text>
+                          )}
+                          {' '}x{product.quantity}
+                        </Text>
+                      </View>
+                      <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                        {hasStoreWideDiscount ? (
+                          <>
+                            <Text style={[styles.productPrice, {color: '#27ae60', fontWeight: 'bold'}]}>
+                              ₹{(discountedUnitPrice * product.quantity).toFixed(2)}
+                            </Text>
+                            <Text style={[styles.productPrice, {textDecorationLine: 'line-through', color: '#999', fontSize: 11, marginLeft: 6}]}>
+                              ₹{(product.product_price * product.quantity).toFixed(2)}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={styles.productPrice}>
+                            ₹{(product.product_price * product.quantity).toFixed(2)}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Offer for this store */}
+                {storeOffer && (
+                  <View style={[styles.offerBadge, {marginTop: 8, marginBottom: 0, padding: 8}]}>
+                    <View style={[styles.offerIconCircle, {width: 20, height: 20}]}>
+                      <Icon name="pricetag-outline" size={12} color="#27ae60" />
+                    </View>
+                    <View style={{flex: 1}}>
+                      <Text style={[styles.offerName, {fontSize: 12}]}>{storeOffer.name || (storeOffer.type === 'free_delivery' ? 'Free Delivery' : 'Special Offer')}</Text>
+                      <Text style={[styles.offerDescription, {fontSize: 10}]}>
+                        {(() => {
+                          const { type, amount, name } = storeOffer;
+                          switch (type) {
+                            case 'discount': return `${amount}% Instant Discount on Total Items Price`;
+                            case 'free_delivery': return '₹0 Delivery fee';
+                            case 'free_product': return `Get Free ${name || 'Gift Item'}`;
+                            case 'cheap_product': return `${amount}% Instant Discount on ${name || 'Some Items'}`;
+                            case 'combo': return `${name || 'Items'} at Only ₹${amount}`;
+                            case 'free_cash': return `₹${amount} Free Cash amount`;
+                            default: return 'Special store offer';
+                          }
+                        })()}
+                      </Text>
+                    </View>
+                  </View>
                 )}
               </View>
-            </View>
-          );
-        })}
+            );
+          });
+        })()}
       </View>
-
-      {/* Applied Offers section */}
-      {(() => {
-        if (!item.applied_offers) return null;
-        const offerEntries = Object.entries(item.applied_offers);
-        if (offerEntries.length === 0) return null;
-
-        return (
-          <View style={styles.offersContainer}>
-            <Text style={styles.offersTitle}>PROMOTIONS APPLIED</Text>
-            {offerEntries.map(([sId, offer]: [string, any], oIdx: number) => (
-              <View key={oIdx} style={styles.offerBadge}>
-                <View style={styles.offerIconCircle}>
-                  <Icon name="pricetag-outline" size={14} color="#27ae60" />
-                </View>
-                <View style={{flex: 1}}>
-                  <Text style={styles.offerName}>{offer.name || (offer.type === 'free_delivery' ? 'Free Delivery' : 'Special Offer')}</Text>
-                  <Text style={styles.offerDescription}>
-                    {(() => {
-                      const { type, amount, name } = offer;
-                      switch (type) {
-                        case 'discount': return `${amount}% Instant Discount on Total Items Price`;
-                        case 'free_delivery': return '₹0 Delivery fee';
-                        case 'free_product': return `Get Free ${name || 'Gift Item'}`;
-                        case 'cheap_product': return `${amount}% Instant Discount on ${name || 'Some Items'}`;
-                        case 'combo': return `${name || 'Items'} at Only ₹${amount}`;
-                        case 'free_cash': return `₹${amount} Free Cash amount`;
-                        default: return 'Special store offer';
-                      }
-                    })()}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        );
-      })()}
 
       <View style={styles.divider} />
 
@@ -359,12 +365,12 @@ const OrdersScreen = () => {
 
             if (Math.abs(originalTotal - item.total_amount) > 1) {
               return (
-                <>
-                  <Text style={[styles.totalAmount, {textDecorationLine: 'line-through', color: '#999', fontSize: 14, marginBottom: -2}]}>
+                <View style={{flexDirection: 'row', alignItems: 'baseline'}}>
+                  <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
+                  <Text style={[styles.totalAmount, {textDecorationLine: 'line-through', color: '#999', fontSize: 14, marginLeft: 6}]}>
                     ₹{originalTotal.toFixed(2)}
                   </Text>
-                  <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
-                </>
+                </View>
               );
             }
             
