@@ -346,19 +346,21 @@ const PaymentsScreen = () => {
                             <View>
                                 <Text style={styles.recipientName}>{group.recipient?.name || group.recipient?.full_name || 'System'}</Text>
                                 <Text style={styles.recipientSub}>{group.recipient?.upi_id || 'No UPI'}</Text>
+                                {group.upiTransactionId && <Text style={styles.utrDetailText}>UTR: {group.upiTransactionId}</Text>}
                                 {group.orderRef && <Text style={styles.orderLabel}>Order #{group.orderRef}</Text>}
                             </View>
                             <Text style={styles.totalAmount}>₹{group.totalAmount.toFixed(2)}</Text>
                         </View>
                         
-                        <View style={styles.badgeRow}>
-                            <View style={[styles.badge, { backgroundColor: isSent ? Colors.success + '15' : isPaid ? Colors.info + '15' : Colors.warning + '15' }]}>
-                                <Text style={[styles.badgeText, { color: isSent || isPaid ? Colors.success : Colors.warning }]}>
-                                    {group.isToday && group.status === 'pending' ? 'ACCUMULATING' : 'PAID'}
-                                </Text>
+                        {!isPaid && !isSent && (
+                            <View style={styles.badgeRow}>
+                                <View style={[styles.badge, { backgroundColor: Colors.warning + '15' }]}>
+                                    <Text style={[styles.badgeText, { color: Colors.warning }]}>
+                                        {group.isToday ? 'ACCUMULATING' : 'PENDING'}
+                                    </Text>
+                                </View>
                             </View>
-                            {group.upiTransactionId && <Text style={styles.utrLabel}>UTR: {group.upiTransactionId}</Text>}
-                        </View>
+                        )}
 
                         {group.canPay && (
                             <View style={styles.actions}>
@@ -367,10 +369,9 @@ const PaymentsScreen = () => {
                                         <Text style={styles.actionBtnText}>Pay Total</Text>
                                     </TouchableOpacity>
                                 ) : (
-                                    <View style={styles.paidBadge}>
-                                        <Icon name="checkmark-done" size={18} color={Colors.success} />
-                                        <Text style={styles.paidText}>Paid</Text>
-                                    </View>
+                                    <TouchableOpacity disabled style={[styles.actionBtn, {backgroundColor: Colors.success + '20', borderWidth: 1, borderColor: Colors.success + '40'}]}>
+                                        <Text style={[styles.actionBtnText, {color: Colors.success}]}>Paid</Text>
+                                    </TouchableOpacity>
                                 )}
                             </View>
                         )}
@@ -448,11 +449,10 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   badgeText: { fontSize: 10, fontWeight: '900' },
   utrLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary },
+  utrDetailText: { fontSize: 12, fontWeight: '800', color: Colors.success, marginTop: 4 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 5 },
   actionBtn: { flex: 1, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   actionBtnText: { color: Colors.white, fontSize: 14, fontWeight: '800' },
-  paidBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.info + '10', borderRadius: 12, height: 45, gap: 6 },
-  paidText: { color: Colors.info, fontWeight: '800', fontSize: 14 },
   empty: { marginTop: 100, alignItems: 'center' },
   emptyText: { color: Colors.textSecondary, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 25 },

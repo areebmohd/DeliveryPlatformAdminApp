@@ -8,6 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  Linking,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
@@ -26,7 +27,12 @@ interface Order {
   order_number: string;
   created_at: string;
   status: string;
+  subtotal: number;
   total_amount: number;
+  delivery_fee: number;
+  platform_fee: number;
+  helper_fee: number;
+  applied_offers: any;
   payment_method: string;
   payment_status: string;
   utr_number?: string;
@@ -35,8 +41,10 @@ interface Order {
   rider_id: string | null;
   delivery_address_id: string;
   stores: {
+    id: string;
     name: string;
     address: string;
+    phone?: string;
   };
   addresses: {
     receiver_name: string;
@@ -141,14 +149,10 @@ const DeliveriesScreen = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending_verification':
-        return 'Pending Approval';
-      case 'accepted':
-      case 'preparing':
-      case 'ready':
-        return 'Ready for Pickup';
+      case 'waiting_for_pickup':
+        return 'Waiting for Pickup';
       case 'picked_up':
-        return 'Out for Delivery';
+        return 'Picked Up';
       case 'delivered':
         return 'Delivered';
       case 'cancelled':
@@ -160,11 +164,7 @@ const DeliveriesScreen = () => {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending_verification':
-        return '#95a5a6'; // Gray
-      case 'accepted':
-      case 'preparing':
-      case 'ready':
+      case 'waiting_for_pickup':
         return '#f39c12'; // Orange
       case 'picked_up':
         return '#3498db'; // Blue
@@ -182,7 +182,7 @@ const DeliveriesScreen = () => {
       {/* Header: Order Info & Status */}
       <View style={styles.cardHeader}>
         <View>
-          <Text style={styles.orderNumber}>Order #{item.order_number}</Text>
+          <Text style={styles.orderNumber}>#{item.order_number}</Text>
           <Text style={styles.orderTime}>
             {new Date(item.created_at).toLocaleTimeString([], {
               hour: '2-digit',
@@ -209,6 +209,13 @@ const DeliveriesScreen = () => {
         </View>
         <Text style={styles.storeName}>{item.stores?.name || 'Unknown Store'}</Text>
         <Text style={styles.addressText}>{item.stores?.address || 'Address not available'}</Text>
+        {item.stores?.phone && (
+          <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.stores.phone}`)}>
+            <Text style={styles.phoneText}>
+              <Icon name="call" size={14} color="#007AFF" /> {item.stores.phone}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.innerDivider} />
@@ -227,9 +234,14 @@ const DeliveriesScreen = () => {
             `${item.addresses[0]?.address_line}, ${item.addresses[0]?.city}` : 
             `${item.addresses?.address_line || 'No address'}, ${item.addresses?.city || ''}`}
         </Text>
-        <Text style={styles.phoneText}>
-          <Icon name="call" size={14} color="#007AFF" /> {Array.isArray(item.addresses) ? item.addresses[0]?.receiver_phone : item.addresses?.receiver_phone}
-        </Text>
+        <TouchableOpacity onPress={() => {
+          const phone = Array.isArray(item.addresses) ? item.addresses[0]?.receiver_phone : item.addresses?.receiver_phone;
+          if (phone) Linking.openURL(`tel:${phone}`);
+        }}>
+          <Text style={styles.phoneText}>
+            <Icon name="call" size={14} color="#007AFF" /> {Array.isArray(item.addresses) ? item.addresses[0]?.receiver_phone : item.addresses?.receiver_phone}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.divider} />
@@ -246,9 +258,14 @@ const DeliveriesScreen = () => {
               <Text style={styles.riderName}>
                 {Array.isArray(item.rider) ? item.rider[0]?.full_name : item.rider.full_name}
               </Text>
-              <Text style={styles.riderPhone}>
-                {Array.isArray(item.rider) ? item.rider[0]?.phone : item.rider.phone}
-              </Text>
+              <TouchableOpacity onPress={() => {
+                const phone = Array.isArray(item.rider) ? item.rider[0]?.phone : item.rider?.phone;
+                if (phone) Linking.openURL(`tel:${phone}`);
+              }}>
+                <Text style={styles.riderPhone}>
+                  {Array.isArray(item.rider) ? item.rider[0]?.phone : item.rider?.phone}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : (
@@ -267,31 +284,54 @@ const DeliveriesScreen = () => {
           <Text style={styles.sectionTitle}>Order Items</Text>
         </View>
         <View style={styles.itemsList}>
-          {item.order_items?.map((product: any) => (
-            <View key={product.id} style={styles.productRow}>
-              <Text style={styles.productName}>
-                {product.product_name}
-                {product.selected_options && Object.keys(product.selected_options).length > 0 && (
-                  <Text style={styles.itemOptionsText}>
-                    {` (${Object.entries(product.selected_options)
-                      .map(([k, v]) => `${v}`)
-                      .join(', ')})`}
+          {item.order_items?.map((product: any) => {
+            const storeOffer = item.applied_offers?.[item.stores?.id || item.store_id];
+            const hasDiscount = storeOffer?.type === 'discount' || storeOffer?.type === 'free_cash';
+            let discountedPrice = product.product_price;
+            
+            if (storeOffer?.type === 'discount') {
+              discountedPrice = product.product_price * (1 - storeOffer.amount / 100);
+            } else if (storeOffer?.type === 'free_cash') {
+              // Usually free_cash is applied to store subtotal, not per item, 
+              // but for display we show it proportionally or just the total.
+              // Here we'll treat it as a store-wide discount shown in breakdown.
+            }
+
+            return (
+              <View key={product.id} style={styles.productRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.productName}>
+                    {product.product_name}
+                    {product.selected_options && Object.keys(product.selected_options).length > 0 && (
+                      <Text style={styles.itemOptionsText}>
+                        {` (${Object.entries(product.selected_options)
+                          .map(([k, v]) => `${v}`)
+                          .join(', ')})`}
+                      </Text>
+                    )}
+                    {' '}x{product.quantity}
                   </Text>
-                )}
-                {' '}x{product.quantity}
-              </Text>
-              <Text style={styles.productPrice}>
-                ₹{(product.product_price * product.quantity).toFixed(2)}
-              </Text>
-            </View>
-          ))}
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  {hasDiscount && storeOffer?.type === 'discount' && (
+                    <Text style={styles.strikePrice}>
+                      ₹{(product.product_price * product.quantity).toFixed(2)}
+                    </Text>
+                  )}
+                  <Text style={styles.productPrice}>
+                    ₹{(Math.round(discountedPrice * product.quantity)).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
         </View>
       </View>
 
       <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
-         <View style={styles.paymentMethod}>
+          <View style={styles.paymentMethod}>
             <Text style={styles.paymentLabel}>Payment Details</Text>
             <Text style={[
               styles.paymentValue,
@@ -305,8 +345,8 @@ const DeliveriesScreen = () => {
             {item.payer_name && (
               <Text style={styles.paymentMetaText}>Payer: {item.payer_name}</Text>
             )}
-         </View>
-         <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
+          </View>
+          <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -568,7 +608,35 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 13,
     color: '#333',
-    fontWeight: '500',
+    fontWeight: '700',
+  },
+  strikePrice: {
+    fontSize: 11,
+    color: '#8e8e93',
+    textDecorationLine: 'line-through',
+    marginBottom: -2,
+  },
+  breakdownContainer: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f2f2f7',
+    gap: 4,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    color: '#8e8e93',
+    fontWeight: '600',
+  },
+  breakdownValue: {
+    fontSize: 11,
+    color: '#3a3a3c',
+    fontWeight: '700',
   },
 });
 
