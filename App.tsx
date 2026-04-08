@@ -18,6 +18,8 @@ import RidersScreen from './src/screens/RidersScreen';
 
 
 import Icon from 'react-native-vector-icons/Ionicons';
+import { NotificationService } from './src/services/notificationService';
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -85,6 +87,11 @@ import { AlertProvider } from './src/context/AlertContext';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+
+  React.useEffect(() => {
+    NotificationService.initialize();
+  }, []);
+
 
   return (
     <SafeAreaProvider>

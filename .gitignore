@@ -76,3 +76,7 @@ yarn-error.log
 
 # Environment
 .env
+android/app/google-services.json
+ios/GoogleService-Info.plist
+*.keystore
+!debug.keystore

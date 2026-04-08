@@ -41,6 +41,7 @@ const NotificationsScreen = () => {
       .from('notifications')
       .select('*')
       .eq('target_group', selectedGroup)
+      .is('order_id', null)
       .order('created_at', { ascending: false });
 
     if (error) {
