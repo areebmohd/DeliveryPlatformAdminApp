@@ -226,8 +226,37 @@ const PaymentsScreen = () => {
           showToast('Updated partially: ' + e.message, 'error');
         }
       },
-      () => showToast('Payment cancelled', 'error')
     );
+  };
+
+  const handleCashPayment = (group: any) => {
+    showAlert({
+      title: 'Confirm Cash Payment',
+      message: `Are you sure you want to mark ₹${group.totalAmount.toFixed(2)} as paid via Cash? Ensure you have received the amount.`,
+      type: 'warning',
+      primaryAction: {
+        text: 'Mark as Paid',
+        onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from('payouts')
+              .update({ 
+                status: 'sent',
+                upi_transaction_id: 'PAID_CASH'
+              })
+              .in('id', group.ids);
+
+            if (error) throw error;
+            showToast('Marked as Paid via Cash!', 'success');
+            fetchPayouts();
+          } catch (e: any) {
+            showToast('Error: ' + e.message, 'error');
+          }
+        }
+      },
+      showCancel: true,
+      cancelText: 'Cancel'
+    });
   };
 
 
@@ -365,7 +394,11 @@ const PaymentsScreen = () => {
                             <View>
                                 <Text style={styles.recipientName}>{group.recipient?.name || group.recipient?.full_name || 'System'}</Text>
                                 <Text style={styles.recipientSub}>{group.recipient?.upi_id || 'No UPI'}</Text>
-                                {group.upiTransactionId && <Text style={styles.utrDetailText}>UTR: {group.upiTransactionId}</Text>}
+                                {group.upiTransactionId && (
+                                    <Text style={styles.utrDetailText}>
+                                        {group.upiTransactionId === 'PAID_CASH' ? '✓ Paid Cash' : `UTR: ${group.upiTransactionId}`}
+                                    </Text>
+                                )}
                                 {group.orderRef && <Text style={styles.orderLabel}>Order #{group.orderRef}</Text>}
                             </View>
                             <Text style={styles.totalAmount}>₹{group.totalAmount.toFixed(2)}</Text>
@@ -384,9 +417,20 @@ const PaymentsScreen = () => {
                         {group.canPay && (
                             <View style={styles.actions}>
                                 {!isPaid && !isSent ? (
-                                    <TouchableOpacity style={[styles.actionBtn, {backgroundColor: Colors.primary}]} onPress={() => handleUpiPayment(group)}>
-                                        <Text style={styles.actionBtnText}>Pay Total</Text>
-                                    </TouchableOpacity>
+                                    <>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, {backgroundColor: Colors.success}]} 
+                                            onPress={() => handleCashPayment(group)}
+                                        >
+                                            <Text style={styles.actionBtnText}>Pay Cash</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, {backgroundColor: Colors.primary}]} 
+                                            onPress={() => handleUpiPayment(group)}
+                                        >
+                                            <Text style={styles.actionBtnText}>Pay Online</Text>
+                                        </TouchableOpacity>
+                                    </>
                                 ) : (
                                     <TouchableOpacity disabled style={[styles.actionBtn, {backgroundColor: Colors.success + '20', borderWidth: 1, borderColor: Colors.success + '40'}]}>
                                         <Text style={[styles.actionBtnText, {color: Colors.success}]}>Paid</Text>
