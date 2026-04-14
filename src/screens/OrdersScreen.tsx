@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
@@ -61,6 +63,10 @@ const OrdersScreen = () => {
   const [sections, setSections] = useState<OrderSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
+    visible: false, 
+    order: null 
+  });
 
   const groupOrdersByDate = (orders: Order[]) => {
     const groups: {[key: string]: Order[]} = {};
@@ -364,17 +370,17 @@ const OrdersScreen = () => {
                                  (hasFreeDelivery ? 25 : 0);
 
             if (Math.abs(originalTotal - item.total_amount) > 1) {
-              return (
-                <View style={{flexDirection: 'row', alignItems: 'baseline'}}>
-                  <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
-                  <Text style={[styles.totalAmount, {textDecorationLine: 'line-through', color: '#999', fontSize: 14, marginLeft: 6}]}>
-                    ₹{originalTotal.toFixed(2)}
-                  </Text>
-                </View>
-              );
-            }
-            
-            return <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>;
+            return (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
+                <TouchableOpacity 
+                   onPress={() => setBreakdownModal({ visible: true, order: item })}
+                   style={{ marginTop: 4 }}
+                >
+                   <Text style={styles.viewSharesText}>View Shares</Text>
+                </TouchableOpacity>
+              </View>
+            );
           })()}
         </View>
       </View>
@@ -424,6 +430,100 @@ const OrdersScreen = () => {
           </View>
         }
       />
+
+      <Modal
+        visible={breakdownModal.visible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Order Breakdown</Text>
+              <TouchableOpacity onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}>
+                <Icon name="close-outline" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+
+            {breakdownModal.order && (
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.breakdownSection}>
+                  <Text style={styles.breakdownSectionTitle}>Store Shares</Text>
+                  {(() => {
+                    const storeShares: { [key: string]: number } = {};
+                    breakdownModal.order.order_items.forEach((oi: any) => {
+                      const sId = oi.products?.store_id || breakdownModal.order.store_id || 'unknown';
+                      const sName = oi.products?.stores?.name || breakdownModal.order.stores?.name || 'Store';
+                      
+                      const storeOffer = breakdownModal.order.applied_offers?.[sId];
+                      let itemAmount = oi.product_price * oi.quantity;
+                      
+                      if (storeOffer?.type === 'discount') {
+                        itemAmount = itemAmount * (1 - storeOffer.amount / 100);
+                      } else if (storeOffer?.type === 'free_cash') {
+                        const totalStoreAmount = breakdownModal.order.order_items
+                          .filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId)
+                          .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
+                        const proportion = (oi.product_price * oi.quantity) / (totalStoreAmount || 1);
+                        itemAmount = (oi.product_price * oi.quantity) - (storeOffer.amount * proportion);
+                      }
+
+                      if (!storeShares[sName]) storeShares[sName] = 0;
+                      storeShares[sName] += itemAmount;
+                    });
+
+                    return Object.entries(storeShares).map(([name, amount], idx) => (
+                      <View key={idx} style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>{name}</Text>
+                        <Text style={styles.breakdownValue}>₹{amount.toFixed(2)}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+
+                <View style={styles.breakdownSection}>
+                  <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
+                  {(breakdownModal.order.delivery_fee > 0) && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Delivery Fee</Text>
+                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.delivery_fee).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {(breakdownModal.order.platform_fee > 0) && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Platform Fee</Text>
+                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.platform_fee).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {(breakdownModal.order.helper_fee > 0) && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Helper Fee</Text>
+                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.helper_fee).toFixed(2)}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={[styles.breakdownRow, styles.grandTotalRowModal]}>
+                  <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
+                  <Text style={styles.grandTotalValueModal}>₹{Number(breakdownModal.order.total_amount).toFixed(2)}</Text>
+                </View>
+              </ScrollView>
+            )}
+
+            <TouchableOpacity 
+              style={styles.closeBtnModal}
+              onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+            >
+              <Text style={styles.closeBtnTextModal}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -582,6 +682,100 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
+  },
+  viewSharesText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingTop: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalBody: {
+    marginBottom: 20,
+  },
+  breakdownSection: {
+    marginBottom: 24,
+  },
+  breakdownSectionTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  breakdownLabel: {
+    fontSize: 14,
+    color: '#444',
+    fontWeight: '600',
+  },
+  breakdownValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '800',
+  },
+  grandTotalRowModal: {
+    borderTopWidth: 2,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 16,
+    marginTop: 8,
+  },
+  grandTotalLabelModal: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  grandTotalValueModal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  closeBtnModal: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  closeBtnTextModal: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   toggleContainer: {
     flexDirection: 'row',
