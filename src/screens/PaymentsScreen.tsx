@@ -22,6 +22,17 @@ const { width } = Dimensions.get('window');
 
 type PayoutType = 'store' | 'rider' | 'customer';
 
+const getRiderDeliveryFee = (order: {
+  rider_delivery_fee?: number | string | null;
+  delivery_fee?: number | string | null;
+}) => {
+  const riderFee = Number(order.rider_delivery_fee ?? 0);
+  if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
+
+  const customerFee = Number(order.delivery_fee ?? 0);
+  return Number.isFinite(customerFee) ? customerFee : 0;
+};
+
 const PaymentsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -111,6 +122,7 @@ const PaymentsScreen = () => {
           payment_method, 
           total_amount, 
           delivery_fee, 
+          rider_delivery_fee,
           rider_id,
           customer_id,
           store_id,
@@ -148,7 +160,7 @@ const PaymentsScreen = () => {
               recipient_id: order.rider_id,
               recipient_type: 'rider',
               order_id: order.id,
-              amount: order.delivery_fee || 25,
+              amount: getRiderDeliveryFee(order),
               payment_date: orderDate,
               status: 'pending'
             });

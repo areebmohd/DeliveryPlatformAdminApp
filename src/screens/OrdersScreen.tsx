@@ -48,8 +48,10 @@ interface Order {
   order_items: OrderItem[];
   applied_offers?: any;
   delivery_fee?: number;
+  rider_delivery_fee?: number;
   platform_fee?: number;
   helper_fee?: number;
+  store_delivery_fees?: Record<string, number>;
   transport_type?: string;
 }
 
@@ -57,6 +59,75 @@ interface OrderSection {
   title: string;
   data: Order[];
 }
+
+export const getItemTotals = (product: any, allStoreItems: any[], storeOffer: any) => {
+  const originalTotal = product.product_price * product.quantity;
+  if (!storeOffer) return { original: originalTotal, discounted: originalTotal };
+
+  let discountedTotal = originalTotal;
+
+  switch (storeOffer.type) {
+    case 'discount':
+      discountedTotal = originalTotal * (1 - storeOffer.amount / 100);
+      break;
+    case 'free_cash':
+      const totalStoreAmount = allStoreItems.reduce((acc: any, curr: any) => acc + curr.product_price * curr.quantity, 0);
+      const proportion = (product.product_price * product.quantity) / (totalStoreAmount || 1);
+      discountedTotal = originalTotal - (storeOffer.amount * proportion);
+      break;
+    case 'cheap_product':
+      if (storeOffer.conditions?.product_ids?.includes(product.product_id || product.id)) {
+        discountedTotal = originalTotal * (1 - storeOffer.amount / 100);
+      }
+      break;
+    case 'fixed_price':
+      if (storeOffer.reward_data?.product_ids?.includes(product.product_id || product.id)) {
+        discountedTotal = storeOffer.amount * product.quantity;
+      }
+      break;
+    case 'combo':
+      if (storeOffer.reward_data?.product_ids?.includes(product.product_id || product.id)) {
+        const comboItems = allStoreItems.filter((i: any) => storeOffer.reward_data?.product_ids?.includes(i.product_id || i.id));
+        const comboBaseValue = comboItems.reduce((acc: any, curr: any) => acc + curr.product_price, 0);
+        const comboDiscount = Math.max(0, comboBaseValue - storeOffer.amount);
+        const itemProportion = product.product_price / (comboBaseValue || 1);
+        discountedTotal = originalTotal - (comboDiscount * itemProportion);
+      }
+      break;
+    case 'free_product':
+      if (product.selected_options?.gift === 'true') {
+        discountedTotal = 0;
+      }
+      break;
+  }
+
+  return { 
+    original: originalTotal, 
+    discounted: Math.max(0, discountedTotal)
+  };
+};
+
+export const getRiderDeliveryFee = (order: {
+  rider_delivery_fee?: number | string | null;
+  delivery_fee?: number | string | null;
+}) => {
+  const riderFee = Number(order.rider_delivery_fee ?? 0);
+  if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
+
+  const customerFee = Number(order.delivery_fee ?? 0);
+  return Number.isFinite(customerFee) ? customerFee : 0;
+};
+
+export const getSponsoredDeliveryFee = (order: {
+  store_delivery_fees?: Record<string, number> | null;
+}) => {
+  if (!order.store_delivery_fees) return 0;
+
+  return Object.values(order.store_delivery_fees).reduce((sum, fee) => {
+    const value = Number(fee ?? 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+};
 
 const OrdersScreen = () => {
   const {showAlert, showToast} = useAlert();
@@ -239,6 +310,7 @@ const OrdersScreen = () => {
 
           return Object.entries(itemsByStore).map(([storeId, storeData], sIdx) => {
             const storeOffer = item.applied_offers?.[storeId];
+            const deliveryOffer = item.applied_offers?.[`${storeId}_delivery`];
             
             return (
               <View key={storeId} style={sIdx > 0 ? {marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0'} : {}}>
@@ -248,17 +320,7 @@ const OrdersScreen = () => {
                 </View>
                 
                 {storeData.items.map((product) => {
-                  const hasStoreWideDiscount = storeOffer && (storeOffer.type === 'discount' || storeOffer.type === 'free_cash');
-                  
-                  let discountedUnitPrice = product.product_price;
-                  if (storeOffer?.type === 'discount') {
-                    discountedUnitPrice = product.product_price * (1 - storeOffer.amount / 100);
-                  } else if (storeOffer?.type === 'free_cash') {
-                    const totalStoreAmount = storeData.items
-                      .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
-                    const proportion = (product.product_price * product.quantity) / (totalStoreAmount || 1);
-                    discountedUnitPrice = (product.product_price * product.quantity - storeOffer.amount * proportion) / product.quantity;
-                  }
+                  const { original, discounted } = getItemTotals(product, storeData.items, storeOffer);
 
                   return (
                     <View key={product.id} style={styles.productRow}>
@@ -268,7 +330,7 @@ const OrdersScreen = () => {
                           {product.selected_options && Object.keys(product.selected_options).length > 0 && (
                             <Text style={styles.itemOptionsText}>
                               {` (${Object.entries(product.selected_options)
-                                .map(([k, v]) => `${v}`)
+                                .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
                                 .join(', ')})`}
                             </Text>
                           )}
@@ -276,18 +338,18 @@ const OrdersScreen = () => {
                         </Text>
                       </View>
                       <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                        {hasStoreWideDiscount ? (
+                        {discounted < original ? (
                           <>
                             <Text style={[styles.productPrice, {color: '#27ae60', fontWeight: 'bold'}]}>
-                              ₹{(discountedUnitPrice * product.quantity).toFixed(2)}
+                              ₹{discounted.toFixed(2)}
                             </Text>
                             <Text style={[styles.productPrice, {textDecorationLine: 'line-through', color: '#999', fontSize: 11, marginLeft: 6}]}>
-                              ₹{(product.product_price * product.quantity).toFixed(2)}
+                              ₹{original.toFixed(2)}
                             </Text>
                           </>
                         ) : (
                           <Text style={styles.productPrice}>
-                            ₹{(product.product_price * product.quantity).toFixed(2)}
+                            ₹{original.toFixed(2)}
                           </Text>
                         )}
                       </View>
@@ -296,32 +358,47 @@ const OrdersScreen = () => {
                 })}
 
                 {/* Offer for this store */}
-                {storeOffer && (
-                  <View style={[styles.offerBadge, {marginTop: 8, marginBottom: 0, padding: 8}]}>
-                    <View style={[styles.offerIconCircle, {width: 20, height: 20}]}>
-                      <Icon name="pricetag-outline" size={12} color="#27ae60" />
-                    </View>
-                    <View style={{flex: 1}}>
-                      <Text style={[styles.offerName, {fontSize: 12}]}>{storeOffer.name || (storeOffer.type === 'free_delivery' ? 'Free Delivery' : 'Special Offer')}</Text>
-                      <Text style={[styles.offerDescription, {fontSize: 10}]}>
-                        {(() => {
-                          const { type, amount, name } = storeOffer;
-                          switch (type) {
-                            case 'discount': return `${amount}% Instant Discount on Total Items Price`;
-                            case 'free_delivery': return '₹0 Delivery fee';
-                            case 'free_product': return `Get Free ${name || 'Gift Item'}`;
-                            case 'cheap_product': return `${amount}% Instant Discount on ${name || 'Some Items'}`;
-                            case 'combo': return `${name || 'Items'} at Only ₹${amount}`;
-                            case 'free_cash': return `₹${amount} Free Cash amount`;
-                            default: return 'Special store offer';
-                          }
-                        })()}
-                      </Text>
-                    </View>
+                {(storeOffer || deliveryOffer) && (
+                  <View style={{marginTop: 8, gap: 8}}>
+                    {storeOffer && (
+                      <View style={[styles.offerBadge, {marginBottom: 0, padding: 8}]}>
+                        <View style={[styles.offerIconCircle, {width: 20, height: 20}]}>
+                          <Icon name="pricetag-outline" size={12} color="#27ae60" />
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={[styles.offerName, {fontSize: 12}]}>{storeOffer.name || (storeOffer.type === 'free_delivery' ? 'Free Delivery' : 'Special Offer')}</Text>
+                          <Text style={[styles.offerDescription, {fontSize: 10}]}>
+                            {(() => {
+                              const { type, amount, name } = storeOffer;
+                              switch (type) {
+                                case 'discount': return `${amount}% Instant Discount on Total Items Price`;
+                                case 'free_delivery': return '₹0 Delivery fee';
+                                case 'free_product': return `Get Free ${name || 'Gift Item'}`;
+                                case 'cheap_product': return `${amount}% Instant Discount on ${name || 'Some Items'}`;
+                                case 'combo': return `${name || 'Items'} at Only ₹${amount}`;
+                                case 'free_cash': return `₹${amount} Free Cash amount`;
+                                default: return 'Special store offer';
+                              }
+                            })()}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {deliveryOffer && (
+                      <View style={[styles.offerBadge, {backgroundColor: '#fffbeb', borderColor: '#fde68a', marginBottom: 0, padding: 8}]}>
+                        <View style={[styles.offerIconCircle, {width: 20, height: 20, backgroundColor: '#fef3c7'}]}>
+                          <Icon name="truck-outline" size={12} color="#d97706" />
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={[styles.offerName, {fontSize: 12, color: '#d97706'}]}>{deliveryOffer.name || 'Free Delivery'}</Text>
+                          <Text style={[styles.offerDescription, {fontSize: 10, color: '#b45309'}]}>₹0 Delivery fee</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
-            );
+              );
           });
         })()}
       </View>
@@ -360,27 +437,27 @@ const OrdersScreen = () => {
             // Calculate original total (items + fees)
             const originalItemsTotal = item.order_items.reduce((acc, oi) => acc + (oi.product_price * oi.quantity), 0);
             
-            // Check for free delivery offers to add back the standard fee
-            const hasFreeDelivery = Object.values(item.applied_offers).some((offer: any) => offer.type === 'free_delivery');
-            
             const originalTotal = originalItemsTotal + 
-                                 Number(item.delivery_fee || 0) + 
+                                 getRiderDeliveryFee(item) + 
                                  Number(item.platform_fee || 0) + 
                                  Number(item.helper_fee || 0) + 
-                                 (hasFreeDelivery ? 25 : 0);
+                                 getSponsoredDeliveryFee(item);
 
             if (Math.abs(originalTotal - item.total_amount) > 1) {
-            return (
-              <View style={{ alignItems: 'flex-end' }}>
+              return (
+                <View style={{ alignItems: 'flex-end' }}>
                 <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
                 <TouchableOpacity 
-                   onPress={() => setBreakdownModal({ visible: true, order: item })}
+                   onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
                    style={{ marginTop: 4 }}
                 >
                    <Text style={styles.viewSharesText}>View Shares</Text>
                 </TouchableOpacity>
-              </View>
-            );
+                </View>
+              );
+            }
+
+            return <Text style={styles.totalAmount}>Rs {Number(item.total_amount).toFixed(2)}</Text>;
           })()}
         </View>
       </View>
@@ -456,39 +533,49 @@ const OrdersScreen = () => {
                   <Text style={styles.breakdownSectionTitle}>Store Shares</Text>
                   {(() => {
                     const storeShares: { [key: string]: number } = {};
+                    const deliverySponsored: { [key: string]: number } = {};
+                    
                     breakdownModal.order.order_items.forEach((oi: any) => {
                       const sId = oi.products?.store_id || breakdownModal.order.store_id || 'unknown';
                       const sName = oi.products?.stores?.name || breakdownModal.order.stores?.name || 'Store';
                       
                       const storeOffer = breakdownModal.order.applied_offers?.[sId];
-                      let itemAmount = oi.product_price * oi.quantity;
+                      const allStoreItems = breakdownModal.order.order_items.filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId);
                       
-                      if (storeOffer?.type === 'discount') {
-                        itemAmount = itemAmount * (1 - storeOffer.amount / 100);
-                      } else if (storeOffer?.type === 'free_cash') {
-                        const totalStoreAmount = breakdownModal.order.order_items
-                          .filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId)
-                          .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
-                        const proportion = (oi.product_price * oi.quantity) / (totalStoreAmount || 1);
-                        itemAmount = (oi.product_price * oi.quantity) - (storeOffer.amount * proportion);
-                      }
+                      const { discounted } = getItemTotals(oi, allStoreItems, storeOffer);
 
                       if (!storeShares[sName]) storeShares[sName] = 0;
-                      storeShares[sName] += itemAmount;
+                      storeShares[sName] += discounted;
+
+                      if (deliverySponsored[sName] === undefined) {
+                        const deliveryFeePaidByStore = Number(breakdownModal.order.store_delivery_fees?.[sId] || 0);
+                        deliverySponsored[sName] = deliveryFeePaidByStore;
+                        storeShares[sName] -= deliveryFeePaidByStore;
+                      }
                     });
 
-                    return Object.entries(storeShares).map(([name, amount], idx) => (
-                      <View key={idx} style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>{name}</Text>
-                        <Text style={styles.breakdownValue}>₹{amount.toFixed(2)}</Text>
-                      </View>
-                    ));
+                    return (
+                      <>
+                        {Object.entries(storeShares).map(([name, amount], idx) => (
+                          <View key={idx} style={styles.breakdownRow}>
+                            <Text style={styles.breakdownLabel}>{name}</Text>
+                            <Text style={styles.breakdownValue}>₹{amount.toFixed(2)}</Text>
+                          </View>
+                        ))}
+                        {Object.entries(deliverySponsored).filter(([_, amt]) => amt > 0).map(([name, amount], idx) => (
+                          <View key={`del-${idx}`} style={styles.breakdownRow}>
+                            <Text style={styles.breakdownLabel}>{name} Sponsored Delivery</Text>
+                            <Text style={[styles.breakdownValue, { color: '#e74c3c' }]}>-₹{amount.toFixed(2)}</Text>
+                          </View>
+                        ))}
+                      </>
+                    );
                   })()}
                 </View>
 
                 <View style={styles.breakdownSection}>
                   <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
-                  {(breakdownModal.order.delivery_fee > 0) && (
+                  {(getRiderDeliveryFee(breakdownModal.order) > 0) && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>Delivery Fee</Text>
                       <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.delivery_fee).toFixed(2)}</Text>
