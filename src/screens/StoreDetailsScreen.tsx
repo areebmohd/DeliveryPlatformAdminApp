@@ -280,7 +280,9 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     }
   };
 
-  const handleContact = (type: string, value: string) => {
+  const handleContact = async (type: string, value: string) => {
+    if (!value) return;
+
     let url = '';
     switch (type) {
       case 'tel':
@@ -299,16 +301,29 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     }
     
     if (url) {
-      Linking.canOpenURL(url).then(supported => {
-        if (supported) {
-          Linking.openURL(url);
+      try {
+        if (type === 'tel' || type === 'mailto') {
+          // For tel and mailto, try to open directly as canOpenURL is often unreliable on Android
+          await Linking.openURL(url);
         } else {
-          console.warn('Cannot open URL:', url);
-          if (type === 'whatsapp') {
-             Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`);
+          const supported = await Linking.canOpenURL(url);
+          if (supported) {
+            await Linking.openURL(url);
+          } else if (type === 'whatsapp') {
+            // Fallback for WhatsApp if the app is not installed
+            await Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`);
+          } else {
+            console.warn('Cannot open URL:', url);
           }
         }
-      });
+      } catch (error) {
+        console.error('Error opening URL:', error);
+        if (type === 'whatsapp') {
+          Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`).catch(e => 
+            console.error('Error opening WhatsApp fallback:', e)
+          );
+        }
+      }
     }
   };
 
@@ -492,25 +507,25 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                 </View>
               </View>
 
-              {(store.phone || store.email || store.whatsapp_number) && (
+              {(currentStore.phone || currentStore.email || currentStore.whatsapp_number) && (
                 <>
                   <View style={styles.infoDivider} />
                   <View style={styles.infoItem}>
                     <Text style={styles.infoLabel}>Contact Information</Text>
                     <View style={styles.contactActions}>
-                      {store.phone && (
+                      {currentStore.phone && (
                         <TouchableOpacity 
                           style={styles.contactButton} 
-                          onPress={() => handleContact('tel', store.phone)}
+                          onPress={() => handleContact('tel', currentStore.phone)}
                         >
                           <Icon name="phone" size={18} color={Colors.white} />
                           <Text style={styles.contactButtonText}>Call</Text>
                         </TouchableOpacity>
                       )}
-                      {store.whatsapp_number && (
+                      {currentStore.whatsapp_number && (
                         <TouchableOpacity 
                           style={[styles.contactButton, { backgroundColor: '#25D366' }]} 
-                          onPress={() => handleContact('whatsapp', store.whatsapp_number)}
+                          onPress={() => handleContact('whatsapp', currentStore.whatsapp_number)}
                         >
                           <Icon name="whatsapp" size={18} color={Colors.white} />
                           <Text style={styles.contactButtonText}>WhatsApp</Text>
