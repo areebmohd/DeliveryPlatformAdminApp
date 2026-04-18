@@ -113,7 +113,7 @@ const AccountScreen = () => {
           
           <View style={styles.infoRow}>
             <Icon name="card-outline" size={20} color="#666" />
-            <Text style={styles.infoText}>aashu9105628720-1@okicici</Text>
+            <Text style={styles.infoText}>Q369351522@ybl</Text>
           </View>
         </View>
 

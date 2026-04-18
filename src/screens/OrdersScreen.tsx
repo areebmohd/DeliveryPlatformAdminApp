@@ -129,6 +129,22 @@ export const getSponsoredDeliveryFee = (order: {
   }, 0);
 };
 
+export const getDisplayPlatformFee = (order: {
+  platform_fee?: number | string | null;
+  rider_delivery_fee?: number | string | null;
+  delivery_fee?: number | string | null;
+  store_delivery_fees?: Record<string, number> | null;
+}) => {
+  const platformFee = Number(order.platform_fee ?? 0);
+  const basePlatformFee = Number.isFinite(platformFee) ? platformFee : 0;
+  const sponsoredDeliveryFee = getSponsoredDeliveryFee(order);
+  const riderDeliveryFee = getRiderDeliveryFee(order);
+
+  if (sponsoredDeliveryFee <= 0) return basePlatformFee;
+
+  return basePlatformFee + Math.max(0, sponsoredDeliveryFee - riderDeliveryFee);
+};
+
 const OrdersScreen = () => {
   const {showAlert, showToast} = useAlert();
   const [sections, setSections] = useState<OrderSection[]>([]);
@@ -581,12 +597,15 @@ const OrdersScreen = () => {
                       <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.delivery_fee).toFixed(2)}</Text>
                     </View>
                   )}
-                  {(breakdownModal.order.platform_fee > 0) && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Platform Fee</Text>
-                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.platform_fee).toFixed(2)}</Text>
-                    </View>
-                  )}
+                  {(() => {
+                    const displayPlatformFee = getDisplayPlatformFee(breakdownModal.order);
+                    return displayPlatformFee > 0 ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>Platform Fee</Text>
+                        <Text style={styles.breakdownValue}>₹{displayPlatformFee.toFixed(2)}</Text>
+                      </View>
+                    ) : null;
+                  })()}
                   {(breakdownModal.order.helper_fee > 0) && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>Helper Fee</Text>

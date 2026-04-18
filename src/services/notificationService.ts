@@ -60,7 +60,7 @@ export class NotificationService {
         
         // Save to Supabase using RPC to bypass RLS and handle uniqueness
         const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id || 'fe22cbf8-72fc-4720-bfea-b4482125c518';
+        const userId = session?.user?.id || null;
 
         const { error } = await supabase.rpc('register_admin_token', {
           p_token: token,

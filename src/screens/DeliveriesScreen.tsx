@@ -15,7 +15,7 @@ import {
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { getItemTotals, getRiderDeliveryFee, getSponsoredDeliveryFee } from './OrdersScreen';
+import { getDisplayPlatformFee, getItemTotals, getRiderDeliveryFee, getSponsoredDeliveryFee } from './OrdersScreen';
 
 interface OrderItem {
   id: string;
@@ -518,12 +518,15 @@ const DeliveriesScreen = () => {
                       <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.delivery_fee).toFixed(2)}</Text>
                     </View>
                   )}
-                  {(breakdownModal.order.platform_fee > 0) && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Platform Fee</Text>
-                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.platform_fee).toFixed(2)}</Text>
-                    </View>
-                  )}
+                  {(() => {
+                    const displayPlatformFee = getDisplayPlatformFee(breakdownModal.order);
+                    return displayPlatformFee > 0 ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>Platform Fee</Text>
+                        <Text style={styles.breakdownValue}>₹{displayPlatformFee.toFixed(2)}</Text>
+                      </View>
+                    ) : null;
+                  })()}
                   {(breakdownModal.order.helper_fee > 0) && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>Helper Fee</Text>
