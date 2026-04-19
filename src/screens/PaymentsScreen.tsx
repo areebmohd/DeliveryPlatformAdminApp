@@ -18,7 +18,7 @@ import { Colors } from '../theme/colors';
 
 const { width } = Dimensions.get('window');
 
-type PayoutType = 'store' | 'rider' | 'customer';
+type PayoutType = 'store' | 'rider';
 
 const getRiderDeliveryFee = (order: {
   rider_delivery_fee?: number | string | null;
@@ -59,8 +59,6 @@ const PaymentsScreen = () => {
       }
 
       const recipientIds = [...new Set(payoutsData.map(p => p.recipient_id))];
-      let enrichedPayouts = [...payoutsData];
-
       if (activeTab === 'store') {
         const { data: stores } = await supabase
           .from('stores')
@@ -141,9 +139,7 @@ const PaymentsScreen = () => {
     }
 
     const recipientName = recipient.name || recipient.full_name || 'Recipient';
-    const note = activeTab === 'customer' 
-      ? `${recipientName} - Order #${group.orderRef}` 
-      : `${recipientName} - ${group.paymentDate}`;
+    const note = `${recipientName} - ${group.paymentDate}`;
 
     const upiUrl = `upi://pay?pa=${recipient.upi_id}&pn=${encodeURIComponent(recipientName)}&am=${group.totalAmount}&cu=INR&tn=${encodeURIComponent(note)}&tr=${group.ids[0]}`;
 
@@ -242,16 +238,7 @@ const PaymentsScreen = () => {
           }
         }
         
-        if (order.status === 'cancelled' && order.payment_method === 'pay_online' && order.customer_id) {
-            newPayouts.push({
-                recipient_id: order.customer_id,
-                recipient_type: 'customer',
-                order_id: order.id,
-                amount: order.total_amount,
-                payment_date: orderDate,
-                status: 'pending'
-            });
-        }
+        // Customer refunds removed per request
       }
 
       const { data: existingPayouts } = await supabase.from('payouts').select('order_id, recipient_id');
@@ -277,22 +264,6 @@ const PaymentsScreen = () => {
 
   const getProcessedData = () => {
     const today = new Date().toLocaleDateString('en-CA');
-    
-    if (activeTab === 'customer') {
-      return payouts.map(p => ({
-        id: p.id,
-        ids: [p.id],
-        recipient: p.recipient,
-        amount: p.amount,
-        totalAmount: parseFloat(p.amount),
-        status: p.status,
-        paymentDate: p.payment_date,
-        orderRef: p.order?.order_number,
-        upiTransactionId: p.upi_transaction_id,
-        isToday: p.payment_date === today,
-        canPay: true
-      }));
-    }
 
     const groups: Record<string, any> = {};
     payouts.forEach(p => {
@@ -346,7 +317,7 @@ const PaymentsScreen = () => {
       
       <View style={styles.topBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer} contentContainerStyle={styles.tabScrollContent}>
-          {(['store', 'rider', 'customer'] as PayoutType[]).map((tab) => (
+          {(['store', 'rider'] as PayoutType[]).map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -460,7 +431,7 @@ const PaymentsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 15, paddingHorizontal: 15, paddingBottom: 5 },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingHorizontal: 15, paddingBottom: 0 },
   tabContainer: { flex: 1, marginRight: 10 },
   tabScrollContent: { gap: 8, paddingRight: 10 },
   tab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#E5E7EB', minWidth: 80, alignItems: 'center' },
@@ -468,8 +439,8 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
   activeTabText: { color: '#FFFFFF' },
   syncBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderRadius: 22, borderWidth: 1.5, borderColor: '#007AFF', elevation: 3, shadowColor: '#007AFF', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
-  content: { padding: 20 },
-  dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 15, marginBottom: 10, gap: 10 },
+  content: { padding: 16, paddingTop: 10 },
+  dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 8, gap: 10 },
   dateText: { fontSize: 12, fontWeight: '900', color: '#6B7280', textTransform: 'uppercase' },
   dailyTotalBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0EEFE', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#B0D5FD' },
   dailyTotalTitle: { fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 6 },
