@@ -1,5 +1,5 @@
 declare module 'react-native-upi-payment' {
-  interface PaymentConfig {
+  interface UpiConfig {
     vpa: string;
     payeeName: string;
     amount: string;
@@ -7,11 +7,14 @@ declare module 'react-native-upi-payment' {
     transactionRef: string;
   }
 
-  export default class RNUpiPayment {
-    static initializePayment(
-      config: PaymentConfig,
-      onSuccess: (response: any) => void,
-      onFailure: (error: any) => void
+  interface UpiPayment {
+    initializePayment(
+      config: UpiConfig,
+      successCallback: (response: any) => void,
+      failureCallback?: (error: any) => void
     ): void;
   }
+
+  const RNUpiPayment: UpiPayment;
+  export default RNUpiPayment;
 }

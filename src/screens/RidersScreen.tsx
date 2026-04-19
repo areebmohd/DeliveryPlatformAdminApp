@@ -143,6 +143,7 @@ const RidersScreen = () => {
           );
         })()}
 
+
         <View style={styles.footerRow}>
           <View style={styles.upiContainer}>
             <Icon name="wallet-outline" size={14} color="#007AFF" />

@@ -40,9 +40,6 @@ interface Order {
   applied_offers: any;
   store_delivery_fees?: Record<string, number>;
   payment_method: string;
-  payment_status: string;
-  utr_number?: string;
-  payer_name?: string;
   store_id: string;
   rider_id: string | null;
   delivery_address_id: string;
@@ -359,29 +356,11 @@ const DeliveriesScreen = () => {
       <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
-          <View style={styles.paymentMethod}>
-            <Text style={styles.paymentLabel}>Payment Details</Text>
-            <Text style={[
-              styles.paymentValue,
-              { color: item.payment_status === 'verified' ? '#27ae60' : '#f39c12' }
-            ]}>
-              {item.payment_method === 'pay_online' ? 'Pay Online' : 'Pay on Delivery'} • {item.payment_status === 'verified' ? 'Received' : 'Not Received'}
-            </Text>
-            {item.utr_number && (
-              <Text style={styles.paymentMetaText}>UTR: {item.utr_number}</Text>
-            )}
-            {item.payer_name && (
-              <Text style={styles.paymentMetaText}>Payer: {item.payer_name}</Text>
-            )}
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View>
             {(() => {
               const hasAnyOffer = item.applied_offers && Object.keys(item.applied_offers).length > 0;
-              if (!hasAnyOffer) {
-                return <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>;
-              }
+              if (!hasAnyOffer) return null;
 
-              // Calculate original total (items + fees)
               const originalItemsTotal = item.order_items.reduce((acc, oi) => acc + (oi.product_price * oi.quantity), 0);
               const originalTotal = originalItemsTotal + 
                                    getRiderDeliveryFee(item) + 
@@ -389,23 +368,20 @@ const DeliveriesScreen = () => {
                                    Number(item.helper_fee || 0) + 
                                    getSponsoredDeliveryFee(item);
 
-              return (
-                <View style={{flexDirection: 'row', alignItems: 'baseline'}}>
-                  <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
-                  {Math.abs(originalTotal - item.total_amount) > 1 && (
-                    <Text style={[styles.totalAmount, {textDecorationLine: 'line-through', color: '#999', fontSize: 13, marginLeft: 6}]}>
-                      ₹{originalTotal.toFixed(2)}
-                    </Text>
-                  )}
-                </View>
-              );
+              if (Math.abs(originalTotal - item.total_amount) > 1) {
+                return (
+                  <TouchableOpacity 
+                    onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
+                  >
+                    <Text style={styles.viewSharesText}>View Shares</Text>
+                  </TouchableOpacity>
+                );
+              }
+              return null;
             })()}
-            <TouchableOpacity 
-              onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
-              style={{ marginTop: 4 }}
-            >
-              <Text style={styles.viewSharesText}>View Shares</Text>
-            </TouchableOpacity>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
           </View>
       </View>
     </View>
@@ -719,7 +695,7 @@ const styles = StyleSheet.create({
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
   },
   paymentMethod: {
     flex: 1,

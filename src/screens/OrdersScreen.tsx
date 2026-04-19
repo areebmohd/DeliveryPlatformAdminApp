@@ -38,8 +38,6 @@ interface Order {
   status: string;
   total_amount: number;
   payment_method: string;
-  payment_status: string;
-  utr_number?: string;
   store_id: string;
   stores: {
     id: string;
@@ -256,34 +254,7 @@ const OrdersScreen = () => {
     }
   };
 
-  const handleVerifyPayment = async (orderId: string, orderNumber: string) => {
-    showAlert({
-      title: 'Confirm Payment',
-      message: `Are you sure you have received the payment for order #${orderNumber}?`,
-      type: 'warning',
-      showCancel: true,
-      primaryAction: {
-        text: 'Yes, Received',
-        onPress: async () => {
-          try {
-            const {error} = await supabase
-              .from('orders')
-              .update({payment_status: 'verified'})
-              .eq('id', orderId);
 
-            if (error) {
-              showAlert({title: 'Error', message: error.message, type: 'error'});
-            } else {
-              showToast('Payment verified', 'success');
-              fetchOrders(); // Refresh the list
-            }
-          } catch (error: any) {
-            showAlert({title: 'Error', message: error.message || 'Failed to update payment status', type: 'error'});
-          }
-        },
-      },
-    });
-  };
 
   const renderOrderItem = ({item}: {item: Order}) => (
     <View style={styles.orderCard}>
@@ -423,36 +394,11 @@ const OrdersScreen = () => {
 
       <View style={styles.cardFooter}>
         <View>
-          <View style={styles.paymentStatusRow}>
-            <Text style={styles.paymentInfo}>
-              {item.payment_method.replace(/_/g, ' ')}
-            </Text>
-            {item.payment_status === 'verified' ? (
-              <View style={styles.verifiedRow}>
-                <Icon name="checkmark-circle" size={14} color="#27ae60" />
-                <Text style={styles.verifiedText}>Payment Received</Text>
-              </View>
-            ) : (
-              <Text style={styles.paymentPendingText}> • {item.payment_status}</Text>
-            )}
-          </View>
-          {item.utr_number && item.payment_method === 'pay_online' && (
-            <View style={styles.utrRow}>
-              <Text style={styles.utrLabel}>UTR:</Text>
-              <Text style={styles.utrValue}>{item.utr_number}</Text>
-            </View>
-          )}
-        </View>
-        <View style={{alignItems: 'flex-end'}}>
           {(() => {
             const hasAnyOffer = item.applied_offers && Object.keys(item.applied_offers).length > 0;
-            if (!hasAnyOffer) {
-              return <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>;
-            }
+            if (!hasAnyOffer) return null;
 
-            // Calculate original total (items + fees)
             const originalItemsTotal = item.order_items.reduce((acc, oi) => acc + (oi.product_price * oi.quantity), 0);
-            
             const originalTotal = originalItemsTotal + 
                                  getRiderDeliveryFee(item) + 
                                  Number(item.platform_fee || 0) + 
@@ -461,33 +407,22 @@ const OrdersScreen = () => {
 
             if (Math.abs(originalTotal - item.total_amount) > 1) {
               return (
-                <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
                 <TouchableOpacity 
-                   onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
-                   style={{ marginTop: 4 }}
+                  onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
                 >
-                   <Text style={styles.viewSharesText}>View Shares</Text>
+                  <Text style={styles.viewSharesText}>View Shares</Text>
                 </TouchableOpacity>
-                </View>
               );
             }
-
-            return <Text style={styles.totalAmount}>Rs {Number(item.total_amount).toFixed(2)}</Text>;
+            return null;
           })()}
+        </View>
+        <View style={{alignItems: 'flex-end'}}>
+          <Text style={styles.totalAmount}>₹{Number(item.total_amount).toFixed(2)}</Text>
         </View>
       </View>
 
-      {item.payment_status !== 'verified' &&
-        !(
-          item.status === 'cancelled' && item.payment_method === 'pay_on_delivery'
-        ) && (
-          <TouchableOpacity
-            style={styles.verifyButton}
-            onPress={() => handleVerifyPayment(item.id, item.order_number)}>
-            <Text style={styles.verifyButtonText}>Payment Received</Text>
-          </TouchableOpacity>
-        )}
+
     </View>
   );
 

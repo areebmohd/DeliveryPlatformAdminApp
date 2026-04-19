@@ -9,14 +9,12 @@ import {
   RefreshControl,
   StatusBar,
   Dimensions,
-  TextInput,
-  Modal,
+  Linking,
 } from 'react-native';
 import { supabase } from '../services/supabaseClient';
 import { useAlert } from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Spacing, borderRadius } from '../theme/colors';
-import RNUpiPayment from 'react-native-upi-payment';
+import { Colors } from '../theme/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -39,14 +37,11 @@ const PaymentsScreen = () => {
   const [activeTab, setActiveTab] = useState<PayoutType>('store');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-
   const { showAlert, showToast } = useAlert();
 
   const fetchPayouts = async () => {
     try {
       setLoading(true);
-      // 1. Fetch raw payouts
       const { data: payoutsData, error: payoutsError } = await supabase
         .from('payouts')
         .select(`
@@ -63,7 +58,6 @@ const PaymentsScreen = () => {
         return;
       }
 
-      // 2. Fetch recipient details based on type
       const recipientIds = [...new Set(payoutsData.map(p => p.recipient_id))];
       let enrichedPayouts = [...payoutsData];
 
@@ -108,12 +102,96 @@ const PaymentsScreen = () => {
     fetchPayouts();
   };
 
+  const triggerConfirmation = (group: any, utr: string = 'PAID_ONLINE') => {
+    showAlert({
+      title: 'Payment Confirmation',
+      message: `Was the payment of ₹${group.totalAmount.toFixed(2)} completed successfully?`,
+      type: 'info',
+      showCancel: true,
+      cancelText: 'No',
+      primaryAction: {
+        text: 'Yes, Completed',
+        onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from('payouts')
+              .update({ 
+                  status: 'sent', 
+                  upi_transaction_id: utr
+              })
+              .in('id', group.ids);
+
+            if (error) throw error;
+            showToast('Payment settled and marked as Paid!', 'success');
+            fetchPayouts();
+          } catch (e: any) {
+            showToast('Error: ' + e.message, 'error');
+          }
+        },
+      },
+    });
+  };
+
+  const handleUpiPayment = (group: any) => {
+    const recipient = group.recipient;
+
+    if (!recipient?.upi_id) {
+      showAlert({ title: 'Missing UPI ID', message: 'Recipient has not linked a UPI ID.', type: 'error' });
+      return;
+    }
+
+    const recipientName = recipient.name || recipient.full_name || 'Recipient';
+    const note = activeTab === 'customer' 
+      ? `${recipientName} - Order #${group.orderRef}` 
+      : `${recipientName} - ${group.paymentDate}`;
+
+    const upiUrl = `upi://pay?pa=${recipient.upi_id}&pn=${encodeURIComponent(recipientName)}&am=${group.totalAmount}&cu=INR&tn=${encodeURIComponent(note)}&tr=${group.ids[0]}`;
+
+    Linking.openURL(upiUrl).catch(() => {
+      showAlert({ title: 'Error', message: 'Could not open any UPI app.', type: 'error' });
+    });
+
+    // Preparation for confirmation when they return
+    setTimeout(() => {
+      triggerConfirmation(group);
+    }, 1500);
+  };
+
+  const handleCashPayment = (group: any) => {
+    showAlert({
+      title: 'Confirm Cash Payment',
+      message: `Are you sure you want to mark ₹${group.totalAmount.toFixed(2)} as paid via Cash?`,
+      type: 'warning',
+      primaryAction: {
+        text: 'Mark as Paid',
+        onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from('payouts')
+              .update({ 
+                status: 'sent',
+                upi_transaction_id: 'PAID_CASH'
+              })
+              .in('id', group.ids);
+
+            if (error) throw error;
+            showToast('Marked as Paid via Cash!', 'success');
+            fetchPayouts();
+          } catch (e: any) {
+            showToast('Error: ' + e.message, 'error');
+          }
+        }
+      },
+      showCancel: true,
+      cancelText: 'Cancel'
+    });
+  };
+
   const generatePayouts = async () => {
     try {
       setIsGenerating(true);
-      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+      const today = new Date().toLocaleDateString('en-CA');
 
-      // 1. Fetch delivered orders that aren't in payouts yet
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -134,11 +212,9 @@ const PaymentsScreen = () => {
       if (ordersError) throw ordersError;
 
       const newPayouts: any[] = [];
-
       for (const order of orders) {
         const orderDate = new Date(order.created_at).toLocaleDateString('en-CA');
 
-        // STORE PAYOUTS (Delivered orders)
         if (order.status === 'delivered' && order.store_id) {
           let storeAmount = 0;
           order.order_items.forEach((item: any) => {
@@ -154,7 +230,6 @@ const PaymentsScreen = () => {
             status: 'pending'
           });
 
-          // RIDER PAYOUTS (Delivered orders)
           if (order.rider_id) {
             newPayouts.push({
               recipient_id: order.rider_id,
@@ -166,8 +241,7 @@ const PaymentsScreen = () => {
             });
           }
         }
-
-        // CUSTOMER REFUNDS (Cancelled online orders)
+        
         if (order.status === 'cancelled' && order.payment_method === 'pay_online' && order.customer_id) {
             newPayouts.push({
                 recipient_id: order.customer_id,
@@ -201,100 +275,27 @@ const PaymentsScreen = () => {
     }
   };
 
-  const handleUpiPayment = (group: any) => {
-    const recipient = activeTab === 'store' ? group.recipient : 
-                    activeTab === 'rider' ? group.recipient : 
-                    group.recipient;
-
-    if (!recipient?.upi_id) {
-      showAlert({ title: 'Missing UPI ID', message: 'Recipient has not linked a UPI ID.', type: 'error' });
-      return;
-    }
-
-    RNUpiPayment.initializePayment(
-      {
-        vpa: recipient.upi_id,
-        payeeName: recipient.name || recipient.full_name,
-        amount: group.totalAmount.toString(),
-        transactionNote: `${activeTab.toUpperCase()} settlement - ${group.paymentDate}`,
-        transactionRef: group.ids[0], // Using the first payout ID as ref
-      },
-      async (response: any) => {
-        try {
-          // Automated UTR fetching: check multiple common fields
-          const capturedUtr = response.txnId || response.ApprovalRefNo || response.txnRef || 'N/A';
-          const { error } = await supabase
-            .from('payouts')
-            .update({ 
-                status: 'sent', // Mark as 'sent' (terminal state) automatically
-                upi_transaction_id: capturedUtr
-            })
-            .in('id', group.ids);
-
-          if (error) throw error;
-          showToast('Payment settled automatically!', 'success');
-          fetchPayouts();
-        } catch (e: any) {
-          showToast('Updated partially: ' + e.message, 'error');
-        }
-      },
-    );
-  };
-
-  const handleCashPayment = (group: any) => {
-    showAlert({
-      title: 'Confirm Cash Payment',
-      message: `Are you sure you want to mark ₹${group.totalAmount.toFixed(2)} as paid via Cash? Ensure you have received the amount.`,
-      type: 'warning',
-      primaryAction: {
-        text: 'Mark as Paid',
-        onPress: async () => {
-          try {
-            const { error } = await supabase
-              .from('payouts')
-              .update({ 
-                status: 'sent',
-                upi_transaction_id: 'PAID_CASH'
-              })
-              .in('id', group.ids);
-
-            if (error) throw error;
-            showToast('Marked as Paid via Cash!', 'success');
-            fetchPayouts();
-          } catch (e: any) {
-            showToast('Error: ' + e.message, 'error');
-          }
-        }
-      },
-      showCancel: true,
-      cancelText: 'Cancel'
-    });
-  };
-
-
-  const consolidatePayouts = (data: any[]) => {
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const getProcessedData = () => {
+    const today = new Date().toLocaleDateString('en-CA');
     
     if (activeTab === 'customer') {
-      // Individual refunds for customers
-      return data.map(p => ({
+      return payouts.map(p => ({
         id: p.id,
         ids: [p.id],
         recipient: p.recipient,
         amount: p.amount,
-        totalAmount: p.amount,
+        totalAmount: parseFloat(p.amount),
         status: p.status,
         paymentDate: p.payment_date,
         orderRef: p.order?.order_number,
         upiTransactionId: p.upi_transaction_id,
         isToday: p.payment_date === today,
-        canPay: true // Customers can canPay immediately
+        canPay: true
       }));
     }
 
-    // Consolidated for Stores and Riders
     const groups: Record<string, any> = {};
-    data.forEach(p => {
+    payouts.forEach(p => {
       const key = `${p.recipient_id}_${p.payment_date}`;
       if (!groups[key]) {
         groups[key] = {
@@ -318,12 +319,12 @@ const PaymentsScreen = () => {
 
     return Object.values(groups).map(g => ({
         ...g,
-        canPay: !g.isToday // Buttons only appear for past days for Store/Rider
+        canPay: !g.isToday
     }));
   };
 
-  const processedData = consolidatePayouts(payouts);
-  const groupedByDate: Record<string, any[]> = processedData.reduce((acc: any, curr) => {
+  const processedData = getProcessedData();
+  const groupedByDate: Record<string, any[]> = processedData.reduce((acc: any, curr: any) => {
     if (!acc[curr.paymentDate]) acc[curr.paymentDate] = [];
     acc[curr.paymentDate].push(curr);
     return acc;
@@ -331,12 +332,10 @@ const PaymentsScreen = () => {
   
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
   
-  const dailyTotalPayouts = React.useMemo(() => {
+  const dailyTotals = React.useMemo(() => {
     const totals: Record<string, number> = {};
     Object.keys(groupedByDate).forEach(date => {
-      totals[date] = groupedByDate[date].reduce((sum, item) => {
-        return sum + item.totalAmount;
-      }, 0);
+      totals[date] = groupedByDate[date].reduce((sum, item) => sum + item.totalAmount, 0);
     });
     return totals;
   }, [groupedByDate]);
@@ -346,12 +345,7 @@ const PaymentsScreen = () => {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.topBar}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.tabContainer}
-          contentContainerStyle={styles.tabScrollContent}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer} contentContainerStyle={styles.tabScrollContent}>
           {(['store', 'rider', 'customer'] as PayoutType[]).map((tab) => (
             <TouchableOpacity
               key={tab}
@@ -390,15 +384,14 @@ const PaymentsScreen = () => {
               <View style={styles.dateLine} />
             </View>
             
-            {dailyTotalPayouts[date] > 0 && (
+            {dailyTotals[date] > 0 && (
               <View style={styles.dailyTotalBox}>
-                <Text style={styles.dailyTotalAmount}>₹{dailyTotalPayouts[date].toFixed(0)}</Text>
+                <Text style={styles.dailyTotalAmount}>₹{dailyTotals[date].toFixed(0)}</Text>
                 <Text style={styles.dailyTotalTitle}>TOTAL PAYOUT</Text>
               </View>
             )}
-            {groupedByDate[date].map((group, idx) => {
+            {groupedByDate[date].map((group: any, idx: number) => {
                 const isPaid = group.status === 'paid' || group.status === 'sent';
-                const isSent = group.status === 'sent';
                 
                 return (
                     <View key={`${date}_${idx}`} style={styles.card}>
@@ -408,7 +401,7 @@ const PaymentsScreen = () => {
                                 <Text style={styles.recipientSub}>{group.recipient?.upi_id || 'No UPI'}</Text>
                                 {group.upiTransactionId && (
                                     <Text style={styles.utrDetailText}>
-                                        {group.upiTransactionId === 'PAID_CASH' ? '✓ Paid Cash' : `UTR: ${group.upiTransactionId}`}
+                                        {group.upiTransactionId === 'PAID_CASH' ? '✓ Paid Cash' : `Paid Online`}
                                     </Text>
                                 )}
                                 {group.orderRef && <Text style={styles.orderLabel}>Order #{group.orderRef}</Text>}
@@ -416,10 +409,10 @@ const PaymentsScreen = () => {
                             <Text style={styles.totalAmount}>₹{group.totalAmount.toFixed(2)}</Text>
                         </View>
                         
-                        {!isPaid && !isSent && (
+                        {!isPaid && (
                             <View style={styles.badgeRow}>
-                                <View style={[styles.badge, { backgroundColor: Colors.warning + '15' }]}>
-                                    <Text style={[styles.badgeText, { color: Colors.warning }]}>
+                                <View style={[styles.badge, { backgroundColor: '#FEF3C7' }]}>
+                                    <Text style={[styles.badgeText, { color: '#D97706' }]}>
                                         {group.isToday ? 'ACCUMULATING' : 'PENDING'}
                                     </Text>
                                 </View>
@@ -428,24 +421,24 @@ const PaymentsScreen = () => {
 
                         {group.canPay && (
                             <View style={styles.actions}>
-                                {!isPaid && !isSent ? (
+                                {!isPaid ? (
                                     <>
                                         <TouchableOpacity 
-                                            style={[styles.actionBtn, {backgroundColor: Colors.success}]} 
-                                            onPress={() => handleCashPayment(group)}
-                                        >
-                                            <Text style={styles.actionBtnText}>Pay Cash</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity 
-                                            style={[styles.actionBtn, {backgroundColor: Colors.primary}]} 
+                                            style={[styles.actionBtn, {backgroundColor: '#007AFF'}]} 
                                             onPress={() => handleUpiPayment(group)}
                                         >
                                             <Text style={styles.actionBtnText}>Pay Online</Text>
                                         </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, {backgroundColor: '#10B981'}]} 
+                                            onPress={() => handleCashPayment(group)}
+                                        >
+                                            <Text style={styles.actionBtnText}>Pay Cash</Text>
+                                        </TouchableOpacity>
                                     </>
                                 ) : (
-                                    <TouchableOpacity disabled style={[styles.actionBtn, {backgroundColor: Colors.success + '20', borderWidth: 1, borderColor: Colors.success + '40'}]}>
-                                        <Text style={[styles.actionBtnText, {color: Colors.success}]}>Paid</Text>
+                                    <TouchableOpacity disabled style={[styles.actionBtn, {backgroundColor: '#10B98120', borderWidth: 1, borderColor: '#10B98140'}]}>
+                                        <Text style={[styles.actionBtnText, {color: '#10B981'}]}>Paid</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -461,108 +454,42 @@ const PaymentsScreen = () => {
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
-
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  topBar: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingTop: 15, 
-    paddingHorizontal: 15, 
-    paddingBottom: 5,
-  },
-  tabContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  tabScrollContent: {
-    gap: 8,
-    paddingRight: 10,
-  },
-  tab: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 20, 
-    backgroundColor: '#E5E7EB',
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  activeTab: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
-  activeTabText: { color: Colors.white },
-  syncBtn: { 
-    width: 44,
-    height: 44,
-    alignItems: 'center', 
-    justifyContent: 'center',
-    backgroundColor: Colors.white, 
-    borderRadius: 22, 
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    elevation: 3,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  syncBtnText: { color: Colors.primary, fontWeight: '800', fontSize: 13 },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 15, paddingHorizontal: 15, paddingBottom: 5 },
+  tabContainer: { flex: 1, marginRight: 10 },
+  tabScrollContent: { gap: 8, paddingRight: 10 },
+  tab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#E5E7EB', minWidth: 80, alignItems: 'center' },
+  activeTab: { backgroundColor: '#007AFF' },
+  tabText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+  activeTabText: { color: '#FFFFFF' },
+  syncBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderRadius: 22, borderWidth: 1.5, borderColor: '#007AFF', elevation: 3, shadowColor: '#007AFF', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
   content: { padding: 20 },
   dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 15, marginBottom: 10, gap: 10 },
-  dateText: { fontSize: 12, fontWeight: '900', color: Colors.textSecondary, textTransform: 'uppercase' },
-  dailyTotalBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0EEFE',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#B0D5FD',
-  },
-  dailyTotalTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#007AFF',
-    marginLeft: 6,
-  },
-  dailyTotalAmount: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#007AFF',
-  },
-  dateLine: { flex: 1, height: 1, backgroundColor: Colors.border + '50' },
-  card: { backgroundColor: Colors.white, borderRadius: 16, padding: 16, marginBottom: 16, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  dateText: { fontSize: 12, fontWeight: '900', color: '#6B7280', textTransform: 'uppercase' },
+  dailyTotalBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0EEFE', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#B0D5FD' },
+  dailyTotalTitle: { fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 6 },
+  dailyTotalAmount: { fontSize: 15, fontWeight: '900', color: '#007AFF' },
+  dateLine: { flex: 1, height: 1, backgroundColor: '#D1D5DB' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  recipientName: { fontSize: 17, fontWeight: '800', color: Colors.text },
-  recipientSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, fontStyle: 'italic' },
-  orderLabel: { fontSize: 11, fontWeight: '800', color: Colors.primary, marginTop: 5 },
-  totalAmount: { fontSize: 20, fontWeight: '900', color: Colors.black },
+  recipientName: { fontSize: 17, fontWeight: '800', color: '#111827' },
+  recipientSub: { fontSize: 12, color: '#6B7280', marginTop: 2, fontStyle: 'italic' },
+  orderLabel: { fontSize: 11, fontWeight: '800', color: '#007AFF', marginTop: 5 },
+  totalAmount: { fontSize: 20, fontWeight: '900', color: '#000000' },
   badgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   badgeText: { fontSize: 10, fontWeight: '900' },
-  utrLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary },
-  utrDetailText: { fontSize: 12, fontWeight: '800', color: Colors.success, marginTop: 4 },
+  utrDetailText: { fontSize: 12, fontWeight: '800', color: '#10B981', marginTop: 4 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 5 },
   actionBtn: { flex: 1, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  actionBtnText: { color: Colors.white, fontSize: 14, fontWeight: '800' },
+  actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   empty: { marginTop: 100, alignItems: 'center' },
-  emptyText: { color: Colors.textSecondary, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 25 },
-  modalContent: { backgroundColor: Colors.white, borderRadius: 24, padding: 25 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: Colors.text, marginBottom: 10 },
-  modalSubtitle: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 20 },
-  utrInput: { backgroundColor: '#F3F4F6', height: 55, borderRadius: 12, paddingHorizontal: 15, fontSize: 16, fontWeight: '700', color: Colors.text, borderWidth: 1, borderColor: Colors.border, marginBottom: 25 },
-  modalActions: { flexDirection: 'row', gap: 15 },
-  cancelBtn: { flex: 1, height: 55, justifyContent: 'center', alignItems: 'center' },
-  cancelBtnText: { color: Colors.textSecondary, fontWeight: '800' },
-  confirmBtn: { flex: 1, height: 55, backgroundColor: Colors.success, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  confirmBtnText: { color: Colors.white, fontWeight: '800' },
+  emptyText: { color: '#6B7280', fontWeight: '600' },
 });
 
 export default PaymentsScreen;

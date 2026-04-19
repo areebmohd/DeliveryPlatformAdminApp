@@ -426,6 +426,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
                   <Text style={styles.detailLabel}>UPI ID:</Text>
                   <Text style={styles.detailValue}>{currentStore.upi_id || 'Not provided'}</Text>
                 </View>
+
                 <View style={styles.verificationDetail}>
                   <Text style={styles.detailLabel}>Email:</Text>
                   <Text style={styles.detailValue}>{currentStore.email || 'Not provided'}</Text>
