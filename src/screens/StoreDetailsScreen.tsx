@@ -20,7 +20,30 @@ import { useAlert } from '../context/AlertContext';
 import { Colors, Spacing, borderRadius } from '../theme/colors';
 
 
-const StoreDetailsScreen = ({ route, navigation }: any) => {
+const renderFormattedValue = (key: string, value: any) => {
+  if (!value || value === 'Not set' || value === 'Not provided') return 'Not set';
+  
+  if (key === 'opening_hours') {
+    try {
+      const hours = typeof value === 'string' ? JSON.parse(value) : value;
+      if (Array.isArray(hours) && hours.length > 0) {
+        return hours.map((h: any) => `${h.start} - ${h.end}`).join(', ');
+      }
+    } catch (e) {
+      return String(value);
+    }
+  }
+  
+  if (key === 'location_wkt' || key === 'location') {
+    if (typeof value === 'string') {
+      return value.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ');
+    }
+  }
+  
+  return String(value);
+};
+
+const StoreDetailsScreen = ({ route, navigation }: { route: any; navigation: any }) => {
   const { showAlert, showToast } = useAlert();
   const { store } = route.params;
   const [loading, setLoading] = useState(false);
@@ -30,11 +53,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
   const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
   const [changedFields, setChangedFields] = useState<{ label: string; old: string; new: string }[]>([]);
 
-  useEffect(() => {
-    fetchStoreDetails();
-  }, []);
-
-  const fetchStoreDetails = async () => {
+  const fetchStoreDetails = React.useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -49,7 +68,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         setCurrentStore(data);
       }
     } catch (e: any) {
-      console.error('Error fetching store details:', e);
       showAlert({
         title: 'Error',
         message: e?.message || 'Failed to load store details',
@@ -58,11 +76,13 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [store?.id, showAlert]);
 
+  useEffect(() => {
+    fetchStoreDetails();
+  }, [fetchStoreDetails]);
 
-
-  const handleActivateStore = async () => {
+  const handleActivateStore = React.useCallback(async () => {
     try {
       if (!currentStore) {
         showAlert({
@@ -75,7 +95,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
       setIsActivating(true);
       
-      // 1. Update database
       const snapshot = {
         name: currentStore.name || '',
         description: currentStore.description || '',
@@ -99,24 +118,23 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
         .update({ 
           is_active: true, 
           is_approved: true,
-          verification_images: [], // Clear images after activation as requested
+          verification_images: [],
           approved_details: snapshot
         })
         .eq('id', store?.id);
 
       if (updateError) throw updateError;
 
-      // 2. Delete images from storage
       if (currentStore.verification_images && currentStore.verification_images.length > 0) {
         for (const url of currentStore.verification_images) {
           try {
-            const bucket = 'banners'; // as used in mainApp
+            const bucket = 'banners';
             const path = url.split(`${bucket}/`)[1];
             if (path) {
               await supabase.storage.from(bucket).remove([path]);
             }
           } catch (storageError) {
-            console.error('Error deleting image from storage:', storageError);
+            // Keep error logging for storage issues
           }
         }
       }
@@ -131,7 +149,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
       showToast('Store activated successfully!', 'success');
     } catch (e: any) {
-      console.error('Activation error:', e);
       showAlert({
         title: 'Error',
         message: 'Could not activate store. ' + e.message,
@@ -140,32 +157,9 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     } finally {
       setIsActivating(false);
     }
-  };
+  }, [currentStore, store?.id, showAlert, showToast]);
 
-  const renderFormattedValue = (key: string, value: any) => {
-    if (!value || value === 'Not set' || value === 'Not provided') return 'Not set';
-    
-    if (key === 'opening_hours') {
-      try {
-        const hours = typeof value === 'string' ? JSON.parse(value) : value;
-        if (Array.isArray(hours) && hours.length > 0) {
-          return hours.map((h: any) => `${h.start} - ${h.end}`).join(', ');
-        }
-      } catch (e) {
-        return String(value);
-      }
-    }
-    
-    if (key === 'location_wkt' || key === 'location') {
-      if (typeof value === 'string') {
-        return value.replace('POINT(', '').replace(')', '').split(' ').reverse().join(', ');
-      }
-    }
-    
-    return String(value);
-  };
-
-  const getChangedFields = () => {
+  const getChangedFields = React.useCallback(() => {
     const fields = [
       { key: 'name', label: 'Store Name' },
       { key: 'description', label: 'Description' },
@@ -204,20 +198,9 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     });
 
     return changes;
-  };
+  }, [currentStore]);
 
-  const handleVerifyChanges = async () => {
-    const changes = getChangedFields();
-    if (changes.length === 0) {
-      // If no data changes detected, still need to clear the flag
-      confirmVerification();
-      return;
-    }
-    setChangedFields(changes);
-    setIsVerificationModalVisible(true);
-  };
-
-  const confirmVerification = async () => {
+  const confirmVerification = React.useCallback(async () => {
     try {
       setIsActivating(true);
       const snapshot = {
@@ -256,7 +239,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
       setIsVerificationModalVisible(false);
       showToast('Store changes verified successfully!', 'success');
     } catch (e: any) {
-      console.error('Verification error:', e);
       showAlert({
         title: 'Error',
         message: 'Could not verify changes. ' + e.message,
@@ -265,9 +247,19 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     } finally {
       setIsActivating(false);
     }
-  };
+  }, [currentStore, store.id, showAlert, showToast]);
 
-  const handleDeactivateStore = async () => {
+  const handleVerifyChanges = React.useCallback(() => {
+    const changes = getChangedFields();
+    if (changes.length === 0) {
+      confirmVerification();
+      return;
+    }
+    setChangedFields(changes);
+    setIsVerificationModalVisible(true);
+  }, [getChangedFields, confirmVerification]);
+
+  const handleDeactivateStore = React.useCallback(async () => {
     try {
       setIsActivating(true);
       
@@ -289,7 +281,6 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
       showToast('Store deactivated successfully!', 'success');
     } catch (e: any) {
-      console.error('Deactivation error:', e);
       showAlert({
         title: 'Error',
         message: 'Could not deactivate store. ' + e.message,
@@ -298,9 +289,9 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     } finally {
       setIsActivating(false);
     }
-  };
+  }, [store.id, showAlert, showToast, currentStore]);
 
-  const handleContact = async (type: string, value: string) => {
+  const handleContact = React.useCallback(async (type: string, value: string) => {
     if (!value) return;
 
     let url = '';
@@ -323,29 +314,22 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
     if (url) {
       try {
         if (type === 'tel' || type === 'mailto') {
-          // For tel and mailto, try to open directly as canOpenURL is often unreliable on Android
           await Linking.openURL(url);
         } else {
           const supported = await Linking.canOpenURL(url);
           if (supported) {
             await Linking.openURL(url);
           } else if (type === 'whatsapp') {
-            // Fallback for WhatsApp if the app is not installed
             await Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`);
-          } else {
-            console.warn('Cannot open URL:', url);
           }
         }
       } catch (error) {
-        console.error('Error opening URL:', error);
         if (type === 'whatsapp') {
-          Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`).catch(e => 
-            console.error('Error opening WhatsApp fallback:', e)
-          );
+          Linking.openURL(`https://wa.me/${value.replace(/\D/g, '')}`).catch(() => {});
         }
       }
     }
-  };
+  }, []);
 
   return (
     <View style={styles.container}>

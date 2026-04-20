@@ -17,6 +17,38 @@ import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { getDisplayPlatformFee, getItemTotals, getRiderDeliveryFee, getSponsoredDeliveryFee } from './OrdersScreen';
 
+export const getStatusLabel = (status: string) => {
+  if (!status) return 'Unknown';
+  switch (status.toLowerCase()) {
+    case 'waiting_for_pickup':
+      return 'Waiting for Pickup';
+    case 'picked_up':
+      return 'Picked Up';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return status.replace(/_/g, ' ');
+  }
+};
+
+export const getStatusColor = (status: string) => {
+  if (!status) return '#7f8c8d';
+  switch (status.toLowerCase()) {
+    case 'waiting_for_pickup':
+      return '#f39c12'; // Orange for waiting
+    case 'picked_up':
+      return '#3498db'; // Blue for picked up
+    case 'delivered':
+      return '#27ae60'; // Green for delivered
+    case 'cancelled':
+      return '#e74c3c'; // Red for cancelled
+    default:
+      return '#7f8c8d';
+  }
+};
+
 interface OrderItem {
   id: string;
   product_name: string;
@@ -71,135 +103,37 @@ interface OrderSection {
   data: Order[];
 }
 
-const DeliveriesScreen = () => {
-  const {showAlert} = useAlert();
-  const [sections, setSections] = useState<OrderSection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
-    visible: false, 
-    order: null 
-  });
 
-  const groupOrdersByDate = (orders: Order[]) => {
-    if (!orders || orders.length === 0) {
-      return [];
-    }
 
-    const groups: {[key: string]: Order[]} = {};
-
-    orders.forEach((order) => {
-      if (!order || !order.created_at) return;
-
-      const date = new Date(order.created_at);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-
-      let dateString = '';
-      if (date.toDateString() === today.toDateString()) {
-        dateString = 'Today';
-      } else if (date.toDateString() === yesterday.toDateString()) {
-        dateString = 'Yesterday';
-      } else {
-        dateString = date.toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        });
-      }
-
-      if (!groups[dateString]) {
-        groups[dateString] = [];
-      }
-      groups[dateString].push(order);
-    });
-
-    return Object.keys(groups).map((date) => ({
-      title: date,
-      data: groups[date],
-    }));
-  };
-
-  const [user, setUser] = useState<any>(null);
-
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
+const DeliveryCard = React.memo(({
+  item,
+  onShowBreakdown
+}: {
+  item: Order;
+  onShowBreakdown: (order: Order) => void;
+}) => {
+  const itemsByStore = React.useMemo(() => {
+    const groups: {[key: string]: {name: string, address: string, phone?: string, items: any[]}} = {};
+    
+    item.order_items.forEach((oi: any) => {
+      const store = oi.products?.stores || item.stores;
+      const storeId = store?.id || item.store_id || 'unknown';
       
-      const { data, error: authError } = await supabase.auth.getUser();
-      if (!authError) {
-        setUser(data?.user || null);
+      if (!groups[storeId]) {
+        groups[storeId] = {
+          name: store?.name || 'Unknown Store',
+          address: store?.address || 'Address not available',
+          phone: store?.phone,
+          items: []
+        };
       }
+      groups[storeId].items.push(oi);
+    });
+    return groups;
+  }, [item]);
 
-      const {data: ordersData, error} = await supabase
-        .from('orders')
-        .select(`
-          *,
-          stores:store_id (*),
-          addresses:delivery_address_id (*),
-          rider:rider_id (full_name, phone),
-          customer:customer_id (full_name, phone),
-          order_items (*, products(id, store_id, stores(*)))
-        `)
-        .order('created_at', {ascending: false});
-
-      if (error) {
-        showAlert({title: 'Error', message: error?.message || 'Failed to fetch orders', type: 'error'});
-      } else {
-        const groupedData = groupOrdersByDate(ordersData || []);
-        setSections(groupedData);
-      }
-    } catch (error: any) {
-      showAlert({title: 'Error', message: error?.message || 'An unexpected error occurred', type: 'error'});
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchOrders();
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'waiting_for_pickup':
-        return 'Waiting for Pickup';
-      case 'picked_up':
-        return 'Picked Up';
-      case 'delivered':
-        return 'Delivered';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return status.replace(/_/g, ' ');
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'waiting_for_pickup':
-        return '#f39c12'; // Orange
-      case 'picked_up':
-        return '#3498db'; // Blue
-      case 'delivered':
-        return '#27ae60'; // Green
-      case 'cancelled':
-        return '#e74c3c'; // Red
-      default:
-        return '#7f8c8d';
-    }
-  };
-
-  const renderOrderItem = ({item}: {item: Order}) => (
+  return (
     <View style={styles.orderCard}>
-      {/* Header: Order Info & Status */}
       <View style={styles.cardHeader}>
         <View>
           <Text style={styles.orderNumber}>#{item.order_number}</Text>
@@ -222,90 +156,67 @@ const DeliveriesScreen = () => {
 
       <View style={styles.divider} />
 
-      {/* Grouped Pickups and Items by Store */}
-      {(() => {
-        const itemsByStore: {[key: string]: {name: string, address: string, phone?: string, items: any[]}} = {};
-        
-        item.order_items.forEach((oi: any) => {
-          const store = oi.products?.stores || item.stores;
-          const storeId = store?.id || item.store_id || 'unknown';
-          
-          if (!itemsByStore[storeId]) {
-            itemsByStore[storeId] = {
-              name: store?.name || 'Unknown Store',
-              address: store?.address || 'Address not available',
-              phone: store?.phone,
-              items: []
-            };
-          }
-          itemsByStore[storeId].items.push(oi);
-        });
-
-        return Object.entries(itemsByStore).map(([storeId, storeData], sIdx) => (
-          <View key={storeId} style={sIdx > 0 ? {marginTop: 16} : {}}>
-            {/* Pickup Section for this store */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Icon name="storefront" size={16} color="#007AFF" />
-                <Text style={styles.sectionTitle}>Pickup from {storeData.name}</Text>
-              </View>
-              <Text style={styles.addressText}>{storeData.address}</Text>
-              {storeData.phone && (
-                <TouchableOpacity onPress={() => Linking.openURL(`tel:${storeData.phone}`)}>
-                  <Text style={styles.phoneText}>
-                    <Icon name="call" size={14} color="#007AFF" /> {storeData.phone}
-                  </Text>
-                </TouchableOpacity>
-              )}
+      {Object.entries(itemsByStore).map(([storeId, storeData], sIdx) => (
+        <View key={storeId} style={sIdx > 0 ? {marginTop: 16} : {}}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Icon name="storefront" size={16} color="#007AFF" />
+              <Text style={styles.sectionTitle}>Pickup from {storeData.name}</Text>
             </View>
+            <Text style={styles.addressText}>{storeData.address}</Text>
+            {storeData.phone && (
+              <TouchableOpacity onPress={() => Linking.openURL(`tel:${storeData.phone}`)}>
+                <Text style={styles.phoneText}>
+                  <Icon name="call" size={14} color="#007AFF" /> {storeData.phone}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-            {/* Items for this store */}
-            <View style={[styles.itemsList, {marginTop: 8, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: '#f2f2f7'}]}>
-              {storeData.items.map((product) => {
-                const storeOffer = item.applied_offers?.[storeId];
-                const { original, discounted } = getItemTotals(product, storeData.items, storeOffer);
+          <View style={[styles.itemsList, {marginTop: 8, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: '#f2f2f7'}]}>
+            {storeData.items.map((product) => {
+              const storeOffer = item.applied_offers?.[storeId];
+              const { original, discounted } = getItemTotals(product, storeData.items, storeOffer);
 
-                return (
-                  <View key={product.id} style={styles.productRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.productName}>
-                        {product.product_name}
-                        {product.selected_options && Object.keys(product.selected_options).length > 0 && (
-                          <Text style={styles.itemOptionsText}>
-                            {` (${Object.entries(product.selected_options)
-                              .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
-                              .join(', ')})`}
-                          </Text>
-                        )}
-                        {' '}x{product.quantity}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {discounted < original ? (
-                        <>
-                          <Text style={styles.productPrice}>
-                            ₹{discounted.toFixed(2)}
-                          </Text>
-                          <Text style={[styles.strikePrice, {marginLeft: 6, textDecorationLine: 'line-through', color: '#999', fontSize: 11}]}>
-                            ₹{original.toFixed(2)}
-                          </Text>
-                        </>
-                      ) : (
-                        <Text style={styles.productPrice}>
-                          ₹{original.toFixed(2)}
+              return (
+                <View key={product.id} style={styles.productRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.productName}>
+                      {product.product_name}
+                      {product.selected_options && Object.keys(product.selected_options).length > 0 && (
+                        <Text style={styles.itemOptionsText}>
+                          {` (${Object.entries(product.selected_options)
+                            .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
+                            .join(', ')})`}
                         </Text>
                       )}
-                    </View>
+                      {' '}x{product.quantity}
+                    </Text>
                   </View>
-                );
-              })}
-            </View>
-            <View style={styles.innerDivider} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {discounted < original ? (
+                      <>
+                        <Text style={styles.productPrice}>
+                          ₹{discounted.toFixed(2)}
+                        </Text>
+                        <Text style={[styles.strikePrice, {marginLeft: 6, textDecorationLine: 'line-through', color: '#999', fontSize: 11}]}>
+                          ₹{original.toFixed(2)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.productPrice}>
+                        ₹{original.toFixed(2)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
-        ));
-      })()}
+          <View style={styles.innerDivider} />
+        </View>
+      ))}
 
-      {/* Delivery Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Icon name="location" size={16} color="#27ae60" />
@@ -331,7 +242,6 @@ const DeliveriesScreen = () => {
 
       <View style={styles.divider} />
 
-      {/* Rider Section */}
       <View style={styles.riderSection}>
         {item.rider ? (
           <View style={styles.riderInfo}>
@@ -379,7 +289,7 @@ const DeliveriesScreen = () => {
               if (Math.abs(originalTotal - item.total_amount) > 1) {
                 return (
                   <TouchableOpacity 
-                    onPress={() => setBreakdownModal({ visible: true, order: { ...item, delivery_fee: getRiderDeliveryFee(item) } })}
+                    onPress={() => onShowBreakdown(item)}
                   >
                     <Text style={styles.viewSharesText}>View Shares</Text>
                   </TouchableOpacity>
@@ -394,12 +304,121 @@ const DeliveriesScreen = () => {
       </View>
     </View>
   );
+});
 
-  const renderSectionHeader = ({section: {title}}: {section: {title: string}}) => (
-    <View style={styles.sectionHeaderBox}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
+const SectionHeader = React.memo(({title}: {title: string}) => (
+  <View style={styles.sectionHeaderBox}>
+    <Text style={styles.sectionHeaderText}>{title}</Text>
+  </View>
+));
+
+const DeliveriesScreen = () => {
+  const {showAlert} = useAlert();
+  const [sections, setSections] = useState<OrderSection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: Order | null }>({ 
+    visible: false, 
+    order: null 
+  });
+
+  const groupOrdersByDate = React.useCallback((orders: Order[]) => {
+    if (!orders || orders.length === 0) {
+      return [];
+    }
+
+    const groups: {[key: string]: Order[]} = {};
+
+    orders.forEach((order) => {
+      if (!order || !order.created_at) return;
+
+      const date = new Date(order.created_at);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+
+      let dateString = '';
+      if (date.toDateString() === today.toDateString()) {
+        dateString = 'Today';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        dateString = 'Yesterday';
+      } else {
+        dateString = date.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        });
+      }
+
+      if (!groups[dateString]) {
+        groups[dateString] = [];
+      }
+      groups[dateString].push(order);
+    });
+
+    return Object.keys(groups).map((date) => ({
+      title: date,
+      data: groups[date],
+    }));
+  }, []);
+
+  const fetchOrders = React.useCallback(async () => {
+    try {
+      const { data, error: authError } = await supabase.auth.getUser();
+      if (!authError) {
+        setUser(data?.user || null);
+      }
+
+      const {data: ordersData, error} = await supabase
+        .from('orders')
+        .select(`
+          *,
+          stores:store_id (*),
+          addresses:delivery_address_id (*),
+          rider:rider_id (full_name, phone),
+          customer:customer_id (full_name, phone),
+          order_items (*, products(id, store_id, stores(*)))
+        `)
+        .order('created_at', {ascending: false});
+
+      if (error) {
+        showAlert({title: 'Error', message: error?.message || 'Failed to fetch orders', type: 'error'});
+      } else {
+        const groupedData = groupOrdersByDate(ordersData || []);
+        setSections(groupedData);
+      }
+    } catch (error: any) {
+      showAlert({title: 'Error', message: error?.message || 'An unexpected error occurred', type: 'error'});
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [showAlert, groupOrdersByDate]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const handleShowBreakdown = React.useCallback((order: Order) => {
+    setBreakdownModal({ 
+      visible: true, 
+      order: { ...order, delivery_fee: getRiderDeliveryFee(order) } 
+    });
+  }, []);
+
+  const renderOrderItem = React.useCallback(({item}: {item: Order}) => (
+    <DeliveryCard item={item} onShowBreakdown={handleShowBreakdown} />
+  ), [handleShowBreakdown]);
+
+  const renderSectionHeader = React.useCallback(({section: {title}}: {section: {title: string}}) => (
+    <SectionHeader title={title} />
+  ), []);
 
   if (loading && !refreshing) {
     return (
@@ -447,84 +466,88 @@ const DeliveriesScreen = () => {
                 <Icon name="close-outline" size={24} color="#000" />
               </TouchableOpacity>
             </View>
+            {(() => {
+              const order = breakdownModal.order;
+              if (!order) return null;
 
-            {breakdownModal.order && (
-              <ScrollView style={styles.modalBody}>
-                <View style={styles.breakdownSection}>
-                  <Text style={styles.breakdownSectionTitle}>Store Shares</Text>
-                  {(() => {
-                    const storeShares: { [key: string]: number } = {};
-                    const deliverySponsored: { [key: string]: number } = {};
-                    
-                    breakdownModal.order.order_items.forEach((oi: any) => {
-                      const sId = oi.products?.store_id || breakdownModal.order.store_id || 'unknown';
-                      const sName = oi.products?.stores?.name || breakdownModal.order.stores?.name || 'Store';
+              return (
+                <ScrollView style={styles.modalBody}>
+                  <View style={styles.breakdownSection}>
+                    <Text style={styles.breakdownSectionTitle}>Store Shares</Text>
+                    {(() => {
+                      const storeShares: { [key: string]: number } = {};
+                      const deliverySponsored: { [key: string]: number } = {};
                       
-                      const storeOffer = breakdownModal.order.applied_offers?.[sId];
-                      const allStoreItems = breakdownModal.order.order_items.filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId);
-                      
-                      const { discounted } = getItemTotals(oi, allStoreItems, storeOffer);
+                      order.order_items.forEach((oi: any) => {
+                        const sId = oi.products?.store_id || order.store_id || 'unknown';
+                        const sName = oi.products?.stores?.name || order.stores?.name || 'Store';
+                        
+                        const storeOffer = order.applied_offers?.[sId];
+                        const allStoreItems = order.order_items.filter((i: any) => (i.products?.store_id || order.store_id) === sId);
+                        
+                        const { discounted } = getItemTotals(oi, allStoreItems, storeOffer);
 
-                      if (!storeShares[sName]) storeShares[sName] = 0;
-                      storeShares[sName] += discounted;
+                        if (!storeShares[sName]) storeShares[sName] = 0;
+                        storeShares[sName] += discounted;
 
-                      if (deliverySponsored[sName] === undefined) {
-                        const deliveryFeePaidByStore = Number(breakdownModal.order.store_delivery_fees?.[sId] || 0);
-                        deliverySponsored[sName] = deliveryFeePaidByStore;
-                        storeShares[sName] -= deliveryFeePaidByStore;
-                      }
-                    });
+                        if (deliverySponsored[sName] === undefined) {
+                          const deliveryFeePaidByStore = Number(order.store_delivery_fees?.[sId] || 0);
+                          deliverySponsored[sName] = deliveryFeePaidByStore;
+                          storeShares[sName] -= deliveryFeePaidByStore;
+                        }
+                      });
 
-                    return (
-                      <>
-                        {Object.entries(storeShares).map(([name, amount], idx) => (
-                          <View key={idx} style={styles.breakdownRow}>
-                            <Text style={styles.breakdownLabel}>{name}</Text>
-                            <Text style={styles.breakdownValue}>₹{amount.toFixed(2)}</Text>
-                          </View>
-                        ))}
-                        {Object.entries(deliverySponsored).filter(([_, amt]) => amt > 0).map(([name, amount], idx) => (
-                          <View key={`del-${idx}`} style={styles.breakdownRow}>
-                            <Text style={styles.breakdownLabel}>{name} Sponsored Delivery</Text>
-                            <Text style={[styles.breakdownValue, { color: '#e74c3c' }]}>-₹{amount.toFixed(2)}</Text>
-                          </View>
-                        ))}
-                      </>
-                    );
-                  })()}
-                </View>
+                      return (
+                        <>
+                          {Object.entries(storeShares).map(([name, amount], idx) => (
+                            <View key={idx} style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>{name}</Text>
+                              <Text style={styles.breakdownValue}>₹{amount.toFixed(2)}</Text>
+                            </View>
+                          ))}
+                          {Object.entries(deliverySponsored).filter(([_, amt]) => amt > 0).map(([name, amount], idx) => (
+                            <View key={`del-${idx}`} style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>{name} Sponsored Delivery</Text>
+                              <Text style={[styles.breakdownValue, { color: '#e74c3c' }]}>-₹{amount.toFixed(2)}</Text>
+                            </View>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </View>
 
-                <View style={styles.breakdownSection}>
-                  <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
-                  {(breakdownModal.order.delivery_fee > 0) && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Delivery Fee</Text>
-                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.delivery_fee).toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {(() => {
-                    const displayPlatformFee = getDisplayPlatformFee(breakdownModal.order);
-                    return displayPlatformFee > 0 ? (
+                  <View style={styles.breakdownSection}>
+                    <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
+                    {(getRiderDeliveryFee(order) > 0) && (
                       <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>Platform Fee</Text>
-                        <Text style={styles.breakdownValue}>₹{displayPlatformFee.toFixed(2)}</Text>
+                        <Text style={styles.breakdownLabel}>Delivery Fee</Text>
+                        <Text style={styles.breakdownValue}>₹{Number(order.delivery_fee).toFixed(2)}</Text>
                       </View>
-                    ) : null;
-                  })()}
-                  {(breakdownModal.order.helper_fee > 0) && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Helper Fee</Text>
-                      <Text style={styles.breakdownValue}>₹{Number(breakdownModal.order.helper_fee).toFixed(2)}</Text>
-                    </View>
-                  )}
-                </View>
+                    )}
+                    {(() => {
+                      const displayPlatformFee = getDisplayPlatformFee(order);
+                      return displayPlatformFee > 0 ? (
+                        <View style={styles.breakdownRow}>
+                          <Text style={styles.breakdownLabel}>Platform Fee</Text>
+                          <Text style={styles.breakdownValue}>₹{displayPlatformFee.toFixed(2)}</Text>
+                        </View>
+                      ) : null;
+                    })()}
+                    {(order.helper_fee && Number(order.helper_fee) > 0) ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>Helper Fee</Text>
+                        <Text style={styles.breakdownValue}>₹{Number(order.helper_fee).toFixed(2)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
 
-                <View style={[styles.breakdownRow, styles.grandTotalRowModal]}>
-                  <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
-                  <Text style={styles.grandTotalValueModal}>₹{Number(breakdownModal.order.total_amount).toFixed(2)}</Text>
-                </View>
-              </ScrollView>
-            )}
+                  <View style={[styles.breakdownRow, styles.grandTotalRowModal]}>
+                    <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
+                    <Text style={styles.grandTotalValueModal}>₹{Number(order.total_amount).toFixed(2)}</Text>
+                  </View>
+                </ScrollView>
+              );
+            })()}
 
             <TouchableOpacity 
               style={styles.closeBtnModal}

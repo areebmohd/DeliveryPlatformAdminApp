@@ -29,6 +29,51 @@ interface DashboardStats {
 
 type Timeframe = 'daily' | 'weekly' | 'monthly';
 
+const formatCurrency = (amount: number) => {
+  return `₹${Number(amount).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 1})}`;
+};
+
+const StatCard = React.memo(({title, value, icon, color, subtitle}: {
+  title: string;
+  value: string | number;
+  icon: string;
+  color: string;
+  subtitle?: string;
+}) => (
+  <View style={styles.statCard}>
+    <View style={[styles.iconContainer, {backgroundColor: color + '20'}]}>
+      <Icon name={icon} size={24} color={color} />
+    </View>
+    <View style={styles.statInfo}>
+      <Text style={styles.statLabel} numberOfLines={1}>{title}</Text>
+      <Text style={[styles.statValue, {color: color}]}>{value}</Text>
+      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+    </View>
+  </View>
+));
+
+const TimeframeButton = React.memo(({label, value, activeValue, onSelect}: {
+  label: string; 
+  value: Timeframe;
+  activeValue: Timeframe;
+  onSelect: (val: Timeframe) => void;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.timeframeBtn,
+      activeValue === value && styles.timeframeBtnActive,
+    ]}
+    onPress={() => onSelect(value)}>
+    <Text
+      style={[
+        styles.timeframeText,
+        activeValue === value && styles.timeframeTextActive,
+      ]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+));
+
 const DashboardScreen = () => {
   const {showAlert} = useAlert();
   const [loading, setLoading] = useState(true);
@@ -36,7 +81,7 @@ const DashboardScreen = () => {
   const [timeframe, setTimeframe] = useState<Timeframe>('daily');
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
-  const fetchDashboardData = async (selectedTimeframe: Timeframe) => {
+  const fetchDashboardData = React.useCallback(async (selectedTimeframe: Timeframe) => {
     try {
       const days = selectedTimeframe === 'daily' ? 1 : selectedTimeframe === 'weekly' ? 7 : 30;
       
@@ -54,53 +99,21 @@ const DashboardScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [showAlert]);
 
   useEffect(() => {
     fetchDashboardData(timeframe);
-  }, [timeframe]);
+  }, [timeframe, fetchDashboardData]);
 
-  const onRefresh = () => {
+  const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     fetchDashboardData(timeframe);
-  };
+  }, [timeframe, fetchDashboardData]);
 
-  const formatCurrency = (amount: number) => {
-    return `₹${Number(amount).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 1})}`;
-  };
-
-  const StatCard = ({title, value, icon, color, subtitle}: any) => (
-    <View style={styles.statCard}>
-      <View style={[styles.iconContainer, {backgroundColor: color + '20'}]}>
-        <Icon name={icon} size={24} color={color} />
-      </View>
-      <View style={styles.statInfo}>
-        <Text style={styles.statLabel} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.statValue, {color: color}]}>{value}</Text>
-        {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-      </View>
-    </View>
-  );
-
-  const TimeframeButton = ({label, value}: {label: string; value: Timeframe}) => (
-    <TouchableOpacity
-      style={[
-        styles.timeframeBtn,
-        timeframe === value && styles.timeframeBtnActive,
-      ]}
-      onPress={() => {
-        setLoading(true);
-        setTimeframe(value);
-      }}>
-      <Text
-        style={[
-          styles.timeframeText,
-          timeframe === value && styles.timeframeTextActive,
-        ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+  const handleTimeframeSelect = React.useCallback((value: Timeframe) => {
+    setLoading(true);
+    setTimeframe(value);
+  }, []);
 
   if (loading && !refreshing) {
     return (
@@ -114,9 +127,9 @@ const DashboardScreen = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.timeframeContainer}>
-          <TimeframeButton label="Daily" value="daily" />
-          <TimeframeButton label="Weekly" value="weekly" />
-          <TimeframeButton label="Monthly" value="monthly" />
+          <TimeframeButton label="Daily" value="daily" activeValue={timeframe} onSelect={handleTimeframeSelect} />
+          <TimeframeButton label="Weekly" value="weekly" activeValue={timeframe} onSelect={handleTimeframeSelect} />
+          <TimeframeButton label="Monthly" value="monthly" activeValue={timeframe} onSelect={handleTimeframeSelect} />
         </View>
       </View>
 

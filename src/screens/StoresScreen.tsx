@@ -33,14 +33,72 @@ interface StoreSection {
   data: Store[];
 }
 
-const StoresScreen = ({ navigation }: any) => {
+const StoreCard = React.memo(({ 
+  item, 
+  onPress 
+}: { 
+  item: Store; 
+  onPress: (store: Store) => void;
+}) => (
+  <TouchableOpacity
+    style={styles.storeCard}
+    onPress={() => onPress(item)}
+  >
+    <View style={styles.bannerContainer}>
+      {item.banner_url ? (
+        <Image source={{ uri: item.banner_url }} style={styles.bannerImage} />
+      ) : (
+        <View style={styles.bannerPlaceholder}>
+          <Icon name="image-outline" size={40} color="#ccc" />
+        </View>
+      )}
+    </View>
+
+    <View style={styles.infoContainer}>
+      <View style={styles.textContainer}>
+        <Text style={styles.storeName}>{item.name}</Text>
+        {item.address && (
+          <Text style={styles.storeAddress} numberOfLines={2}>
+            {item.address}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.statusContainer}>
+        {item.has_pending_changes && (
+          <View style={[styles.statusBadge, { backgroundColor: '#FF3B30', marginBottom: 4 }]}>
+            <Text style={styles.statusText}>Unverified Changes</Text>
+          </View>
+        )}
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: item.is_active ? '#34C759' : '#FF9500' },
+          ]}
+        >
+          <Text style={styles.statusText}>
+            {item.is_active ? 'Active' : 'Unactive'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  </TouchableOpacity>
+));
+
+const StoreSectionHeader = React.memo(({ title }: { title: string }) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionHeaderText}>{title}</Text>
+  </View>
+));
+
+const StoresScreen = ({ navigation }: { navigation: any }) => {
   const { showAlert } = useAlert();
   const [storeSections, setStoreSections] = useState<StoreSection[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unactive' | 'unverified'>('all');
 
-  const processStores = (stores: Store[] | null | undefined, filter: string) => {
+  const processStores = React.useCallback((stores: Store[] | null | undefined, filter: string) => {
     if (!stores || stores.length === 0) {
       return [];
     }
@@ -75,9 +133,9 @@ const StoresScreen = ({ navigation }: any) => {
       title: date,
       data: groupedData[date],
     }));
-  };
+  }, []);
 
-  const fetchStores = async () => {
+  const fetchStores = React.useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -87,9 +145,9 @@ const StoresScreen = ({ navigation }: any) => {
 
       if (error) throw error;
 
-      setAllStores(data as Store[] || []);
-      const sections = processStores(data as Store[], activeFilter);
-      setStoreSections(sections);
+      const storeData = data as Store[] || [];
+      setAllStores(storeData);
+      setStoreSections(processStores(storeData, activeFilter));
     } catch (error: any) {
       showAlert({
         title: 'Error checking stores',
@@ -100,76 +158,33 @@ const StoresScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeFilter, processStores, showAlert]);
 
   useFocusEffect(
     React.useCallback(() => {
       fetchStores();
-    }, [])
+    }, [fetchStores])
   );
 
   useEffect(() => {
-    const sections = processStores(allStores, activeFilter);
-    setStoreSections(sections);
-  }, [activeFilter, allStores]);
+    setStoreSections(processStores(allStores, activeFilter));
+  }, [activeFilter, allStores, processStores]);
 
-  const renderStoreCard = ({ item }: { item: Store }) => (
-    <TouchableOpacity
-      style={styles.storeCard}
-      onPress={() => {
-        navigation.navigate('StoreDetails', { store: item });
-      }}
-    >
-      <View style={styles.bannerContainer}>
-        {item.banner_url ? (
-          <Image source={{ uri: item.banner_url }} style={styles.bannerImage} />
-        ) : (
-          <View style={styles.bannerPlaceholder}>
-            <Icon name="image-outline" size={40} color="#ccc" />
-          </View>
-        )}
-      </View>
+  const handleStorePress = React.useCallback((store: Store) => {
+    navigation.navigate('StoreDetails', { store });
+  }, [navigation]);
 
-      <View style={styles.infoContainer}>
-        <View style={styles.textContainer}>
-          <Text style={styles.storeName}>{item.name}</Text>
-          {item.address && (
-            <Text style={styles.storeAddress} numberOfLines={2}>
-              {item.address}
-            </Text>
-          )}
-        </View>
+  const renderStoreCard = React.useCallback(({ item }: { item: Store }) => (
+    <StoreCard item={item} onPress={handleStorePress} />
+  ), [handleStorePress]);
 
-        <View style={styles.statusContainer}>
-          {item.has_pending_changes && (
-            <View style={[styles.statusBadge, { backgroundColor: '#FF3B30', marginBottom: 4 }]}>
-              <Text style={styles.statusText}>Unverified Changes</Text>
-            </View>
-          )}
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: item.is_active ? '#34C759' : '#FF9500' },
-            ]}
-          >
-            <Text style={styles.statusText}>
-              {item.is_active ? 'Active' : 'Unactive'}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderSectionHeader = ({
+  const renderSectionHeader = React.useCallback(({
     section: { title },
   }: {
     section: StoreSection;
   }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
+    <StoreSectionHeader title={title} />
+  ), []);
 
   return (
     <View style={styles.container}>
