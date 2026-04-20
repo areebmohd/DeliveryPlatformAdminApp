@@ -36,16 +36,27 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
   const fetchStoreDetails = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('stores_with_location')
         .select('*')
-        .eq('id', store.id)
+        .eq('id', store?.id)
         .single();
 
       if (error) throw error;
-      setCurrentStore(data);
-    } catch (e) {
+      
+      if (data) {
+        setCurrentStore(data);
+      }
+    } catch (e: any) {
       console.error('Error fetching store details:', e);
+      showAlert({
+        title: 'Error',
+        message: e?.message || 'Failed to load store details',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,25 +64,34 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
 
   const handleActivateStore = async () => {
     try {
+      if (!currentStore) {
+        showAlert({
+          title: 'Error',
+          message: 'Store data not loaded',
+          type: 'error',
+        });
+        return;
+      }
+
       setIsActivating(true);
       
       // 1. Update database
       const snapshot = {
-        name: currentStore.name,
-        description: currentStore.description,
-        category: currentStore.category,
-        upi_id: currentStore.upi_id,
-        phone: currentStore.phone,
-        email: currentStore.email,
-        whatsapp_number: currentStore.whatsapp_number,
-        address_line_1: currentStore.address_line_1,
-        pincode: currentStore.pincode,
-        city: currentStore.city,
-        state: currentStore.state,
-        owner_name: currentStore.owner_name,
-        owner_number: currentStore.owner_number,
-        location: currentStore.location_wkt,
-        opening_hours: currentStore.opening_hours,
+        name: currentStore.name || '',
+        description: currentStore.description || '',
+        category: currentStore.category || '',
+        upi_id: currentStore.upi_id || '',
+        phone: currentStore.phone || '',
+        email: currentStore.email || '',
+        whatsapp_number: currentStore.whatsapp_number || '',
+        address_line_1: currentStore.address_line_1 || '',
+        pincode: currentStore.pincode || '',
+        city: currentStore.city || '',
+        state: currentStore.state || '',
+        owner_name: currentStore.owner_name || '',
+        owner_number: currentStore.owner_number || '',
+        location: currentStore.location_wkt || '',
+        opening_hours: currentStore.opening_hours || [],
       };
 
       const { error: updateError } = await supabase
@@ -82,7 +102,7 @@ const StoreDetailsScreen = ({ route, navigation }: any) => {
           verification_images: [], // Clear images after activation as requested
           approved_details: snapshot
         })
-        .eq('id', store.id);
+        .eq('id', store?.id);
 
       if (updateError) throw updateError;
 

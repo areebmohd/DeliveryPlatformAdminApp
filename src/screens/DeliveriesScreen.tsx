@@ -82,9 +82,15 @@ const DeliveriesScreen = () => {
   });
 
   const groupOrdersByDate = (orders: Order[]) => {
+    if (!orders || orders.length === 0) {
+      return [];
+    }
+
     const groups: {[key: string]: Order[]} = {};
 
     orders.forEach((order) => {
+      if (!order || !order.created_at) return;
+
       const date = new Date(order.created_at);
       const today = new Date();
       const yesterday = new Date();
@@ -121,10 +127,12 @@ const DeliveriesScreen = () => {
     try {
       setLoading(true);
       
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      setUser(authUser);
+      const { data, error: authError } = await supabase.auth.getUser();
+      if (!authError) {
+        setUser(data?.user || null);
+      }
 
-      const {data, error} = await supabase
+      const {data: ordersData, error} = await supabase
         .from('orders')
         .select(`
           *,
@@ -137,13 +145,13 @@ const DeliveriesScreen = () => {
         .order('created_at', {ascending: false});
 
       if (error) {
-        showAlert({title: 'Error', message: error.message, type: 'error'});
+        showAlert({title: 'Error', message: error?.message || 'Failed to fetch orders', type: 'error'});
       } else {
-        const groupedData = groupOrdersByDate(data || []);
+        const groupedData = groupOrdersByDate(ordersData || []);
         setSections(groupedData);
       }
     } catch (error: any) {
-      showAlert({title: 'Error', message: error.message || 'An unexpected error occurred', type: 'error'});
+      showAlert({title: 'Error', message: error?.message || 'An unexpected error occurred', type: 'error'});
     } finally {
       setLoading(false);
       setRefreshing(false);

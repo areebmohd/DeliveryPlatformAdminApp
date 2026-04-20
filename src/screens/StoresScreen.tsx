@@ -40,8 +40,13 @@ const StoresScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unactive' | 'unverified'>('all');
 
-  const processStores = (stores: Store[], filter: string) => {
+  const processStores = (stores: Store[] | null | undefined, filter: string) => {
+    if (!stores || stores.length === 0) {
+      return [];
+    }
+
     const filtered = stores.filter(store => {
+      if (!store) return false;
       if (filter === 'unactive') return !store.is_active;
       if (filter === 'unverified') return store.has_pending_changes;
       return true;
@@ -50,6 +55,8 @@ const StoresScreen = ({ navigation }: any) => {
     const groupedData: { [key: string]: Store[] } = {};
 
     filtered.forEach(store => {
+      if (!store) return;
+
       const dateString = store.created_at
         ? new Date(store.created_at).toLocaleDateString('en-GB', {
           day: 'numeric',
@@ -80,15 +87,16 @@ const StoresScreen = ({ navigation }: any) => {
 
       if (error) throw error;
 
-      setAllStores(data as Store[]);
+      setAllStores(data as Store[] || []);
       const sections = processStores(data as Store[], activeFilter);
       setStoreSections(sections);
     } catch (error: any) {
       showAlert({
         title: 'Error checking stores',
-        message: error.message,
+        message: error?.message || 'Failed to load stores',
         type: 'error',
       });
+      setAllStores([]);
     } finally {
       setLoading(false);
     }

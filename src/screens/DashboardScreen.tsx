@@ -45,9 +45,11 @@ const DashboardScreen = () => {
       });
 
       if (error) throw error;
-      setStats(data as DashboardStats);
+      
+      setStats((data || {}) as DashboardStats);
     } catch (error: any) {
-      showAlert({title: 'Error', message: error.message, type: 'error'});
+      showAlert({title: 'Error', message: error?.message || 'Failed to load dashboard data', type: 'error'});
+      setStats(null);
     } finally {
       setLoading(false);
       setRefreshing(false);

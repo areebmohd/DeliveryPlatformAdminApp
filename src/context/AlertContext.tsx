@@ -52,6 +52,15 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (toastTimer.current) {
+        clearTimeout(toastTimer.current);
+      }
+    };
+  }, []);
+
   const showAlert = useCallback((config: Omit<AlertConfig, 'visible'>) => {
     setAlertConfig({ ...config, visible: true });
   }, []);
