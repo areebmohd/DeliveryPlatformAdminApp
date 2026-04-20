@@ -9,12 +9,8 @@ import {StatusBar, useColorScheme} from 'react-native';
 import DashboardScreen from './src/screens/DashboardScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import DeliveriesScreen from './src/screens/DeliveriesScreen';
-import PaymentsScreen from './src/screens/PaymentsScreen';
 import StoresScreen from './src/screens/StoresScreen';
-import AccountScreen from './src/screens/AccountScreen';
-import NotificationsScreen from './src/screens/NotificationsScreen';
 import StoreDetailsScreen from './src/screens/StoreDetailsScreen';
-import RidersScreen from './src/screens/RidersScreen';
 
 
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -52,8 +48,8 @@ function TabNavigator() {
             iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'Deliveries') {
             iconName = focused ? 'bicycle' : 'bicycle-outline';
-          } else if (route.name === 'Account') {
-            iconName = focused ? 'person-circle' : 'person-circle-outline';
+          } else if (route.name === 'Stores') {
+            iconName = focused ? 'storefront' : 'storefront-outline';
           }
 
           return <Icon name={iconName} size={size} color={color} />;
@@ -75,9 +71,9 @@ function TabNavigator() {
         options={{ title: 'Deliveries' }} 
       />
       <Tab.Screen 
-        name="Account" 
-        component={AccountScreen} 
-        options={{ title: 'Account' }} 
+        name="Stores" 
+        component={StoresScreen} 
+        options={{ title: 'Stores' }} 
       />
     </Tab.Navigator>
   );
@@ -89,7 +85,15 @@ function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   React.useEffect(() => {
-    NotificationService.initialize();
+    let cleanup: (() => void) | undefined;
+
+    NotificationService.initialize().then(unsubscribe => {
+      cleanup = unsubscribe;
+    });
+
+    return () => {
+      cleanup?.();
+    };
   }, []);
 
 
@@ -102,30 +106,9 @@ function App() {
             <Stack.Screen name="MainTabs" component={TabNavigator} />
 
             <Stack.Screen 
-              name="Payments" 
-              component={PaymentsScreen}
-              options={{ headerShown: true, headerTitle: 'Payments', headerBackTitle: '' }}
-            />
-            <Stack.Screen 
-              name="Stores" 
-              component={StoresScreen}
-              options={{ headerShown: true, headerTitle: 'Stores', headerBackTitle: '' }}
-            />
-            <Stack.Screen 
-              name="Notifications" 
-              component={NotificationsScreen}
-              options={{ headerShown: true, headerTitle: 'Notifications', headerBackTitle: '' }}
-            />
-            <Stack.Screen 
               name="StoreDetails" 
               component={StoreDetailsScreen}
               options={{ headerShown: false }}
-            />
-
-            <Stack.Screen 
-              name="Riders" 
-              component={RidersScreen}
-              options={{ headerShown: true, headerTitle: 'Riders', headerBackTitle: '' }}
             />
           </Stack.Navigator>
 
@@ -136,4 +119,3 @@ function App() {
 }
 
 export default App;
-
