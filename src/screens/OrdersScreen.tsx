@@ -15,6 +15,7 @@ import {
 import {supabase} from '../services/supabaseClient';
 import {useAlert} from '../context/AlertContext';
 import Icon from 'react-native-vector-icons/Ionicons';
+import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 interface OrderItem {
   id: string;
@@ -301,7 +302,7 @@ const OrderCard = React.memo(({
                   {deliveryOffer && (
                     <View style={[styles.offerBadge, {backgroundColor: '#fffbeb', borderColor: '#fde68a', marginBottom: 0, padding: 8}]}>
                       <View style={[styles.offerIconCircle, {width: 20, height: 20, backgroundColor: '#fef3c7'}]}>
-                        <Icon name="truck-outline" size={12} color="#d97706" />
+                        <MCIcon name="truck-delivery-outline" size={12} color="#d97706" />
                       </View>
                       <View style={{flex: 1}}>
                         <Text style={[styles.offerName, {fontSize: 12, color: '#d97706'}]}>{deliveryOffer.name || 'Free Delivery'}</Text>
